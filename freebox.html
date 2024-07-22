@@ -8,7 +8,10 @@
 let agent = navigator.userAgent;
 
 
-document.getElementById("demo").innerHTML = `<b>User-agent: <b> ${agent} <br>model: ${navigator.fbx.modelName} <br>firmwareVersion: ${navigator.fbx.firmwareVersion}<br>language: ${navigator.fbx.language}`;
+document.getElementById("demo").innerHTML = `<b>User-agent: </b> ${agent} <br>
+model: ${navigator.fbx.modelName} <br>
+firmwareVersion: ${navigator.fbx.firmwareVersion}<br>
+language: ${navigator.fbx.language}`;
 function keyhandler(event) {
         document.getElementById('key').innerHTML = event.keyCode + " : " + event.key;
 }
