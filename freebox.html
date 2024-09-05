@@ -3,20 +3,28 @@
 <body>
 
 <p id="userAgent"></p>
-<p id="model"></p>
+<!-- <p id="model"></p>
 <p id="firmware"></p>
+        -->
 <p id="key"></p>
 <script>
 let agent = navigator.userAgent;
 
 
 document.getElementById("userAgent").innerHTML = `<b>User-agent: </b> ${agent}`;
-document.getElementById("model").innerHTML = `model: ${navigator?.fbx?.modelName}`;
-document.getElementById("firmware").innerHTML = `firmwareVersion: ${navigator?.fbx?.firmwareVersion}`;
+//document.getElementById("model").innerHTML = `model: ${navigator?.fbx?.modelName}`;
+//document.getElementById("firmware").innerHTML = `firmwareVersion: ${navigator?.fbx?.firmwareVersion}`;
 function keyhandler(event) {
         document.getElementById('key').innerHTML = event.keyCode + " : " + event.key;
 }
 window.onkeydown = keyhandler;
+        window.prototype.customFunction = function () {
+                console.log('available');
+        }
+        
+        window.alternateCustomFunction = function () {
+                console.log('available');
+        }
 </script>
 
 
