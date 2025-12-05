@@ -149,15 +149,34 @@
             appendLog('Connection opened', 'info');
           });
 
-          ws.addEventListener('message', (ev) => {
-            // call handleMessage and also show on screen
-            try {
-              handleMessage(ev.data);
-            } catch (err) {
-              console.error('handleMessage error', err);
-            }
-            appendLog(typeof ev.data === 'string' ? ev.data : JSON.stringify(ev.data), 'recv');
-          });
+          ws.addEventListener('message', async (ev) => {
+  let payload = ev.data;
+
+  // Blob (common when server sends binary frames)
+  if (payload instanceof Blob) {
+    // modern browsers support blob.text()
+    payload = await payload.text();
+  } else if (payload instanceof ArrayBuffer) {
+    // binary ArrayBuffer -> convert to string
+    payload = new TextDecoder().decode(new Uint8Array(payload));
+  } else if (payload instanceof Uint8Array) {
+    payload = new TextDecoder().decode(payload);
+  }
+
+  // Try parse JSON, otherwise keep as string
+  let parsed = payload;
+  if (typeof payload === 'string') {
+    try {
+      parsed = JSON.parse(payload);
+    } catch (e) {
+      // not JSON — keep string
+    }
+  }
+
+  // display + call handler
+  appendLog(typeof payload === 'string' ? payload : JSON.stringify(payload), 'recv');
+  try { handleMessage(parsed); } catch (err) { console.error('handleMessage error', err); }
+});
 
           ws.addEventListener('close', (ev) => {
             appendLog('Connection closed (code=' + ev.code + ')', 'info');
