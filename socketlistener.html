@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WebSocket Connector</title>
+  <style>
+    html,body {
+      height: 100%;
+      margin: 0;
+      font-family: Inter, Roboto, Arial, sans-serif;
+      background: #f5f7fb;
+      color: #111827;
+    }
+
+    .center {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 6px 20px rgba(20,30,60,0.08);
+      width: 420px;
+      max-width: calc(100% - 32px);
+      position: relative;
+    }
+
+    .field {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #e6e9ef;
+      outline: none;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status {
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .log {
+      height: 180px;
+      overflow: auto;
+      border-radius: 8px;
+      border: 1px solid #eceef3;
+      padding: 8px;
+      background: #fbfdff;
+      font-family: Consolas, Menlo, monospace;
+      font-size: 13px;
+      color: #0f1724;
+    }
+
+    .small {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="center">
+    <div class="card" role="region" aria-label="WebSocket connector">
+      <div class="small">WebSocket URL (base)</div>
+      <div class="field">
+        <!-- Default base URL is a placeholder; change to your Render URL like wss://my-app.onrender.com -->
+        <input id="baseUrl" type="text" value="wss://your-ws.server.example.com/" placeholder="wss://your-ws.server.example.com/" />
+      </div>
+
+      <div class="small">String to append as <code>?id=...</code></div>
+      <div class="field">
+        <input id="idInput" type="text" placeholder="enter id (example: chatroom1)" />
+        <button id="connectBtn">Connect</button>
+      </div>
+
+      <div class="status" id="status">Status: <strong id="state">disconnected</strong></div>
+
+      <div class="small">Log (incoming/outgoing)</div>
+      <div id="log" class="log" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const baseUrlEl = document.getElementById('baseUrl');
+      const idEl = document.getElementById('idInput');
+      const connectBtn = document.getElementById('connectBtn');
+      const stateEl = document.getElementById('state');
+      const logEl = document.getElementById('log');
+
+      let ws = null;
+
+      function appendLog(...parts) {
+        const time = new Date().toLocaleTimeString();
+        const line = '[' + time + '] ' + parts.join(' ');
+        const div = document.createElement('div');
+        div.textContent = line;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setState(s) {
+        stateEl.textContent = s;
+      }
+
+      function buildUrl(base, key, value) {
+        // ensures we append query parameter properly even if base already has query string
+        try {
+          // Use URL to handle various base formats
+          const url = new URL(base);
+          url.searchParams.set(key, value);
+          return url.toString();
+        } catch (e) {
+          // if base isn't parseable by URL (e.g., missing protocol), try a simple fallback
+          const sep = base.includes('?') ? '&' : '?';
+          return base + sep + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+        }
+      }
+
+      function disconnect() {
+        if (ws) {
+          try { ws.close(1000, 'client disconnect'); } catch (e) {}
+          ws = null;
+          setState('disconnected');
+          connectBtn.textContent = 'Connect';
+          connectBtn.disabled = false;
+          appendLog('Info: disconnected');
+        }
+      }
+
+      function connect() {
+        const rawBase = baseUrlEl.value.trim();
+        const rawId = idEl.value.trim();
+        if (!rawBase) {
+          alert('Enter a base WebSocket URL (e.g. wss://my-app.onrender.com/).');
+          return;
+        }
+        if (!rawId) {
+          alert('Enter the id string to append as a query parameter.');
+          return;
+        }
+
+        const wsUrl = buildUrl(rawBase, 'id', rawId);
+
+        // prevent double connect
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          appendLog('Info: already connected');
+          return;
+        }
+
+        appendLog('Info: connecting to', wsUrl);
+        setState('connecting');
+        connectBtn.disabled = true;
+
+        try {
+          ws = new WebSocket(wsUrl);
+
+          ws.addEventListener('open', () => {
+            setState('connected');
+            connectBtn.textContent = 'Disconnect';
+            connectBtn.disabled = false;
+            appendLog('Info: connection open');
+          });
+
+          ws.addEventListener('message', (ev) => {
+            // call the user-specified handler on every incoming message
+            try {
+              handleMessage(ev.data);
+            } catch (err) {
+              console.error('handleMessage error', err);
+            }
+          });
+
+          ws.addEventListener('close', (ev) => {
+            appendLog('Info: connection closed', 'code=' + ev.code, 'reason=' + ev.reason);
+            setState('disconnected');
+            connectBtn.textContent = 'Connect';
+          });
+
+          ws.addEventListener('error', (err) => {
+            appendLog('Error: socket error', err && err.message ? err.message : '');
+            setState('error');
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'Connect';
+          });
+
+        } catch (err) {
+          appendLog('Error: failed to create WebSocket', err.message || err);
+          setState('error');
+          connectBtn.disabled = false;
+          connectBtn.textContent = 'Connect';
+        }
+      }
+
+      // attach connect/disconnect to button
+      connectBtn.addEventListener('click', () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          disconnect();
+        } else {
+          connect();
+        }
+      });
+
+      // close socket when page unloads
+      window.addEventListener('beforeunload', () => {
+        if (ws) {
+          try { ws.close(1000, 'page unload'); } catch (e) {}
+        }
+      });
+
+      // Expose a simple send method for convenience (optional)
+      window.wsSend = function (msg) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          appendLog('Warn: socket not open, cannot send');
+          return;
+        }
+        const payload = typeof msg === 'string' ? msg : JSON.stringify(msg);
+        ws.send(payload);
+        appendLog('>> sent:', payload);
+      };
+
+      // The message handler that's called on every incoming message.
+      // Replace or extend this function in your page to do custom processing.
+      window.handleMessage = function (message) {
+        // default behavior: log and display the message in the UI
+        appendLog('<< recv:', typeof message === 'string' ? message : JSON.stringify(message));
+        // you can parse JSON if you know the server sends JSON:
+        try {
+          const parsed = JSON.parse(message);
+          // Example: do something with parsed JSON
+          // console.log('parsed JSON', parsed);
+        } catch (e) {
+          // not JSON — that's okay
+        }
+      };
+
+      // small usability: press Enter on id input to connect
+      idEl.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          connect();
+        }
+      });
+
+      // Pre-fill host when opened from same host (convenience)
+      (function setDefaultHost() {
+        try {
+          const loc = window.location;
+          if (loc.protocol === 'https:') {
+            // prefer wss
+            baseUrlEl.value = (baseUrlEl.value && baseUrlEl.value !== '') ? baseUrlEl.value : `wss://${loc.host}/`;
+          } else if (loc.protocol === 'http:') {
+            baseUrlEl.value = (baseUrlEl.value && baseUrlEl.value !== '') ? baseUrlEl.value : `ws://${loc.host}/`;
+          }
+        } catch (e) {}
+      })();
+
+    })();
+  </script>
+</body>
+</html>
