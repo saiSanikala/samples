@@ -25,11 +25,6 @@
     <div class="card" role="region" aria-label="WebSocket connector">
       <!-- Input area -->
       <div id="inputArea">
-        <div class="meta">WebSocket URL (base)</div>
-        <div class="field">
-          <input id="baseUrl" type="text" value="wss://your-ws.server.example.com/" placeholder="wss://your-ws.server.example.com/" />
-        </div>
-
         <div class="meta">String to append as <code>?id=...</code></div>
         <div class="field">
           <input id="idInput" type="text" placeholder="enter id (example: chatroom1)" />
@@ -53,7 +48,7 @@
 
   <script>
     (function () {
-      const baseUrlEl = document.getElementById('baseUrl');
+      // const baseUrlEl = document.getElementById('baseUrl');
       const idEl = document.getElementById('idInput');
       const connectBtn = document.getElementById('connectBtn');
       const disconnectBtn = document.getElementById('disconnectBtn');
@@ -118,19 +113,19 @@
       }
 
       function connect() {
-        const rawBase = baseUrlEl.value.trim();
+        // const rawBase = baseUrlEl.value.trim();
         const rawId = idEl.value.trim();
-        if (!rawBase) {
-          alert('Enter a base WebSocket URL (e.g. wss://my-app.onrender.com/).');
-          return;
-        }
+        // if (!rawBase) {
+        //   alert('Enter a base WebSocket URL (e.g. wss://my-app.onrender.com/).');
+        //   return;
+        // }
         if (!rawId) {
           alert('Enter the id string to append as a query parameter.');
           return;
         }
-
+        connectToId(rawId);
+        return;
         const wsUrl = buildUrl(rawBase, 'id', rawId);
-
         // prevent double connect
         if (ws && ws.readyState === WebSocket.OPEN) {
           appendLog('Already connected', 'info');
