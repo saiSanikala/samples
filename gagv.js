@@ -1,6 +1,13 @@
 // compare-monitor.js — updated: legend toggles hide/show color-coded elements inside compare popup only
 // wss://socket-0akf.onrender.com/?id=sai
-(function () {
+
+
+
+    // establish socket connection.
+    var WS = '';
+    var WS_LIVE = false;
+
+var GAGV = (function () {
     if (window.__compareMonitorInstalled) return;
     window.__compareMonitorInstalled = true;
     window.__compareIgnoreKeys = window.__compareIgnoreKeys || ["timestamp", "event_type", "event_id", "TimeStamp"];
@@ -42,26 +49,6 @@
     };
 
 
-    // establish socket connection.
-    var WS = '';
-    var WS_LIVE = false;
-    
-    function connectToSocket(id) {
-        WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
-        ws.addEventListener('open', () => {
-            WS_LIVE = true;
-            console.log('connected as: ' + id);
-        });
-    }
-
-    function postMessageViaSocket(msg) {
-        if (msg && WS_LIVE) {
-            ws.send(msg);
-        }
-    }
-
-
-
     // element helper
     function el(tag, props = {}, ...children) {
         const node = document.createElement(tag);
@@ -82,14 +69,13 @@
     function ensureOverlay() {
         let overlay = document.getElementById(OVERLAY_ID);
         if (overlay) return overlay;
-
         overlay = el('div', {
             id: OVERLAY_ID,
             style: {
                 position: 'fixed',
                 right: '0',
                 top: '0',
-                width: '50%',
+                width: window.isClient ? '100%' : '50%',
                 height: '100%',
                 background: 'rgba(255,255,255,0.02)',
                 zIndex: String(2147483647),
@@ -129,15 +115,21 @@
         }, el('div', { id: TABLE_ID, style: { width: '100%' } }));
 
         card.appendChild(header);
+        if(window.isClient) {
+            var report = el('button', { id: 'compare_view', style: { padding: '8px 12px' } }, 'Reports');
+            report.addEventListener('click', function(){
+                compareControl('compare');
+            })
+            card.appendChild(report);
+        }
         card.appendChild(tableWrap);
         overlay.appendChild(card);
         document.body.appendChild(overlay);
-
         buildTableSkeleton();
         return overlay;
     }
 
-    function showOverlay() { ensureOverlay().style.display = 'block'; }
+    function showOverlay() { ensureOverlay().style.display = 'block'; connectToSocket('sai')}
     function hideOverlay() { const ov = document.getElementById(OVERLAY_ID); if (ov) ov.style.display = 'none'; }
 
     // Table skeleton: S.No | GA | GV | EventID | P | C
@@ -546,16 +538,14 @@
 
         for (const single of candidates) {
             const singleName = extractEvtNameFromEventObject(single);
-            if (window.GV_PAYLOAD.length >= 20)
+            if (window.isClient && window.GV_PAYLOAD.length >= 20)
                 window.GV_PAYLOAD.shift();
             window.GV_PAYLOAD.push(single);
             const newPayload = transformGVforGA(single);
             const sourceType = (typeof rawUrl === 'string' && rawUrl.toLowerCase().includes(ENDPOINT_C_FRAGMENT)) ? 'C' : 'B';
             const eventId = getEventIdFromPayload(newPayload) || '';
             const item = { evtName: singleName, payload: newPayload, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl, sourceType, event_id: eventId };
-
             state.listB.push(item);
-
             // If there are rows with same evtName and no eventId yet, prefer to attach discovered event_id (helps linking)
             if (eventId) {
                 for (const r of state.rows) {
@@ -724,7 +714,8 @@
     // ---------------- Event handling ----------------
     function handleApiEvent(evt) {
         try {
-            postMessageViaSocket(evt);
+            if(!window.isClient)
+                postMessageViaSocket(evt);
             if (!evt || !evt.url) return;
             const url = String(evt.url || '').toLowerCase();
 
@@ -740,7 +731,7 @@
                     else evtName = extractEvtNameFromEventObject(payload);
                 } catch (e) { }
                 window.QA_JOURNEY.path.push({ event: evtName, screen: payload.events[0].params.ScreenName || '' });
-                if (window.GA_PAYLOAD.length >= 20)
+                if (window.isClient && window.GA_PAYLOAD.length >= 20)
                     window.GA_PAYLOAD.shift();
                 window.GA_PAYLOAD.push(payload);
                 const newPayload = transformGAtoGV(payload);
@@ -775,9 +766,16 @@
         }
     }
 
-    function refreshCounts() {
+    function refreshCounts(status) {
+        status = status || '';
         const s = document.getElementById(STATUS_ID);
+        if(status != '') {
+            s.textContent = status;
+            return;
+        }
         if (s) s.textContent = state.running ? 'Monitoring' : 'Stopped';
+        if(!window.isClient)
+            postMessageViaSocket({type: 'monitoring', statue: s.textContent});
     }
 
     function startCapture() {
@@ -792,12 +790,14 @@
         state.listA = []; state.listB = []; state.queueB = []; state.rows = []; state.compareIndex = 0;
         buildTableSkeleton();
         refreshCounts();
-        if (!window.__apiMonitor || typeof window.__apiMonitor.onEvent !== 'function') {
-            const tableRoot = document.getElementById(TABLE_ID);
-            if (tableRoot) tableRoot.innerHTML = '<div style="color:#b00">ERROR: window.__apiMonitor not found. Include api-monitor.js before using this tool.</div>';
-            return;
+        if(!window.isClient) {
+            if (!window.__apiMonitor || typeof window.__apiMonitor.onEvent !== 'function') {
+                const tableRoot = document.getElementById(TABLE_ID);
+                if (tableRoot) tableRoot.innerHTML = '<div style="color:#b00">ERROR: window.__apiMonitor not found. Include api-monitor.js before using this tool.</div>';
+                return;
+            }
+            state.unsub = window.__apiMonitor.onEvent(handleApiEvent);
         }
-        state.unsub = window.__apiMonitor.onEvent(handleApiEvent);
         state.running = true;
         refreshCounts();
     }
@@ -1393,4 +1393,51 @@
 
     console.info('compare-monitor installed. Use compareControl("show"|"hide"|"start"|"stop"|"compare").');
 
+    return {
+        handleApiEvent: handleApiEvent,
+        startCapture: startCapture,
+        refreshCounts: refreshCounts
+    };
 })();
+    function connectToSocket(id) {
+        if(WS_LIVE)
+            return;
+        WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
+        console.log('connectToSocket');
+        WS.addEventListener('open', () => {
+            WS_LIVE = true;
+            console.log('connected as: ' + id);
+            compareControl('show');
+        });
+        if(window.isClient) {
+            GAGV.startCapture();
+            WS.addEventListener('message', async (ev) => {
+                try {
+                    var payload = ev.data;
+                    if (payload instanceof Blob) {
+                        payload = await payload.text();
+                        payload = JSON.parse(payload);
+                        if(payload.type && payload.type == 'monitoring') {
+                            GAGV.refreshCounts(payload.status);
+                        } else
+                            GAGV.handleApiEvent(payload);
+                    }
+                } catch (err) {
+                    console.error('handleMessage error', err);
+                }
+            });
+        }
+    }
+
+    function postMessageViaSocket(msg) {
+        try {
+            var parseMessage = typeof msg == 'object' ? msg : JSON.parse(msg);
+            if(parseMessage.type && parseMessage.type == 'connected')
+                return;
+            if (msg && WS_LIVE) {
+                WS.send(JSON.stringify(msg));
+            }
+        } catch(e){
+            console.log('postMessageViaSocket: ' + e);
+        }
+    }
