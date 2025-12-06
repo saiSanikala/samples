@@ -18,7 +18,6 @@
     .meta { font-size:12px; color:#6b7280; margin-bottom:10px; }
     .hidden { display:none !important; }
   </style>
-  <script type='text/javascript' src='./gagv.js'></script>
 </head>
 <body>
   <div class="center">
@@ -45,7 +44,10 @@
 
     </div>
   </div>
-
+  <script>
+    window.isClient = true;
+  </script>
+  <script type='text/javascript' src='./gagv.js'></script>
   <script>
     (function () {
       // const baseUrlEl = document.getElementById('baseUrl');
@@ -57,186 +59,16 @@
       const inputArea = document.getElementById('inputArea');
       const messageArea = document.getElementById('messageArea');
 
-      let ws = null;
-
-      function appendLog(message, meta) {
-        const time = new Date().toLocaleTimeString();
-        const container = document.createElement('div');
-        const m = document.createElement('div');
-        m.className = 'msg';
-        m.textContent = message;
-        const t = document.createElement('div');
-        t.style.fontSize = '11px';
-        t.style.color = '#6b7280';
-        t.textContent = (meta ? meta + ' · ' : '') + time;
-        container.appendChild(m);
-        container.appendChild(t);
-        logEl.appendChild(container);
-        logEl.scrollTop = logEl.scrollHeight;
-      }
-
-      function setState(s) {
-        stateEl.textContent = s;
-      }
-
-      function buildUrl(base, key, value) {
-        try {
-          const url = new URL(base);
-          url.searchParams.set(key, value);
-          return url.toString();
-        } catch (e) {
-          const sep = base.includes('?') ? '&' : '?';
-          return base + sep + encodeURIComponent(key) + '=' + encodeURIComponent(value);
-        }
-      }
-
-      function showMessageArea() {
-        inputArea.classList.add('hidden');
-        messageArea.classList.remove('hidden');
-      }
-
-      function showInputArea() {
-        inputArea.classList.remove('hidden');
-        messageArea.classList.add('hidden');
-      }
-
-      function disconnect(notify) {
-        if (ws) {
-          try { ws.close(1000, 'client disconnect'); } catch (e) {}
-          ws = null;
-        }
-        setState('disconnected');
-        showInputArea();
-        if (notify) {
-          alert('Socket disconnected');
-        }
-      }
-
       function connect() {
-        // const rawBase = baseUrlEl.value.trim();
         const rawId = idEl.value.trim();
-        // if (!rawBase) {
-        //   alert('Enter a base WebSocket URL (e.g. wss://my-app.onrender.com/).');
-        //   return;
-        // }
         if (!rawId) {
           alert('Enter the id string to append as a query parameter.');
           return;
         }
-        connectToId(rawId);
+        connectToSocket(rawId);
         return;
-        const wsUrl = buildUrl(rawBase, 'id', rawId);
-        // prevent double connect
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          appendLog('Already connected', 'info');
-          return;
         }
-
-        setState('connecting');
-        connectBtn.disabled = true;
-
-        try {
-          ws = new WebSocket(wsUrl);
-
-          ws.addEventListener('open', () => {
-            setState('connected');
-            connectBtn.disabled = false;
-            showMessageArea();
-            appendLog('Connection opened', 'info');
-          });
-
-          ws.addEventListener('message', async (ev) => {
-  let payload = ev.data;
-
-  // Blob (common when server sends binary frames)
-  if (payload instanceof Blob) {
-    // modern browsers support blob.text()
-    payload = await payload.text();
-  } else if (payload instanceof ArrayBuffer) {
-    // binary ArrayBuffer -> convert to string
-    payload = new TextDecoder().decode(new Uint8Array(payload));
-  } else if (payload instanceof Uint8Array) {
-    payload = new TextDecoder().decode(payload);
-  }
-
-  // Try parse JSON, otherwise keep as string
-  let parsed = payload;
-  if (typeof payload === 'string') {
-    try {
-      parsed = JSON.parse(payload);
-    } catch (e) {
-      // not JSON — keep string
-    }
-  }
-
-  // display + call handler
-  appendLog(typeof payload === 'string' ? payload : JSON.stringify(payload), 'recv');
-  try { handleMessage(parsed); } catch (err) { console.error('handleMessage error', err); }
-});
-
-          ws.addEventListener('close', (ev) => {
-            appendLog('Connection closed (code=' + ev.code + ')', 'info');
-            disconnect(true); // show alert
-          });
-
-          ws.addEventListener('error', (err) => {
-            console.error('WebSocket error', err);
-            appendLog('Socket error', 'error');
-            // Do not alert on every error; let close handle notification
-          });
-
-        } catch (err) {
-          appendLog('Failed to create WebSocket: ' + (err.message || err), 'error');
-          setState('error');
-          connectBtn.disabled = false;
-        }
-      }
-
-      // Expose a simple send method for convenience
-      window.wsSend = function (msg) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          appendLog('Warn: socket not open, cannot send', 'warn');
-          return;
-        }
-        const payload = typeof msg === 'string' ? msg : JSON.stringify(msg);
-        ws.send(payload);
-        appendLog(payload, 'sent');
-      };
-
-      // The message handler called for every incoming message.
-      window.handleMessage = function (message) {
-        // default: nothing special beyond being displayed. Replace as needed.
-        // e.g., parse JSON and update UI: const obj = JSON.parse(message);
-        // console.log('handleMessage:', message);
-      };
-
-      connectBtn.addEventListener('click', () => connect());
-      disconnectBtn.addEventListener('click', () => disconnect(false));
-
-      // Enter key on id input connects
-      idEl.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') connect();
-      });
-
-      // cleanup on unload
-      window.addEventListener('beforeunload', () => {
-        if (ws) {
-          try { ws.close(1000, 'page unload'); } catch (e) {}
-        }
-      });
-
-      // auto-fill host convenience
-      (function setDefaultHost() {
-        try {
-          const loc = window.location;
-          if (loc.protocol === 'https:') {
-            baseUrlEl.value = baseUrlEl.value && baseUrlEl.value !== '' ? baseUrlEl.value : `wss://${loc.host}/`;
-          } else if (loc.protocol === 'http:') {
-            baseUrlEl.value = baseUrlEl.value && baseUrlEl.value !== '' ? baseUrlEl.value : `ws://${loc.host}/`;
-          }
-        } catch (e) {}
-      })();
-
+        connectBtn.addEventListener('click', connect);
     })();
   </script>
 </body>
