@@ -43,12 +43,17 @@
 
 
     // establish socket connection.
-    const ws = new WebSocket(`wss://socket-0akf.onrender.com/?id=sai`);
+    var WS = '';
     var WS_LIVE = false;
-    ws.addEventListener('open', () => {
-        WS_LIVE = true;
-        console.log('connected as ' + id);
-    });
+    
+    function connectToSocket(id) {
+        WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
+        ws.addEventListener('open', () => {
+            WS_LIVE = true;
+            console.log('connected as: ' + id);
+        });
+    }
+
     function postMessageViaSocket(msg) {
         if (msg && WS_LIVE) {
             ws.send(msg);
