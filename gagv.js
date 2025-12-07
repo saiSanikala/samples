@@ -6,6 +6,7 @@
     // establish socket connection.
     var WS = '';
     var WS_LIVE = false;
+    var SOCKET_ID = '';
 
 var GAGV = (function () {
     if (window.__compareMonitorInstalled) return;
@@ -102,7 +103,8 @@ var GAGV = (function () {
 
         const header = el('div', { style: { padding: '8px 12px', borderBottom: '1px solid #eee', display: 'flex', gap: '8px', alignItems: 'center' } },
             el('div', { style: { fontWeight: 'bold', color: 'black', fontSize: '25px' } }, 'Events Monitor'),
-            el('div', { id: STATUS_ID, style: { marginLeft: 'auto', fontSize: '13px', color: '#333', fontWeight: 'bold' } }, 'Idle')
+            el('div', { id: STATUS_ID, style: { marginLeft: 'auto', fontSize: '13px', color: '#333', fontWeight: 'bold' } }, 'Idle'),
+            el('div', { id: 'socket_id', style: { marginLeft: 'auto', fontSize: '10px', color: '#333', fontWeight: 'bold' } }, '')
         );
 
         const tableWrap = el('div', {
@@ -129,7 +131,11 @@ var GAGV = (function () {
         return overlay;
     }
 
-    function showOverlay() { ensureOverlay().style.display = 'block'; connectToSocket('sai')}
+    function showOverlay() { 
+        ensureOverlay().style.display = 'block'; 
+        if(!window.isClient) 
+            connectToSocket();
+        }
     function hideOverlay() { const ov = document.getElementById(OVERLAY_ID); if (ov) ov.style.display = 'none'; }
 
     // Table skeleton: S.No | GA | GV | EventID | P | C
@@ -1400,8 +1406,13 @@ var GAGV = (function () {
     };
 })();
     function connectToSocket(id) {
+        id = id || localStorage.getItem('socketid') || '';
         if(WS_LIVE)
             return;
+        if(id == '') {
+            id = Math.random().toString(36).substring(2, 7);
+        }
+        SOCKET_ID = id;
         WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
         console.log('connectToSocket');
         WS.addEventListener('open', () => {
@@ -1409,6 +1420,8 @@ var GAGV = (function () {
             console.log('connected as: ' + id);
             compareControl('show');
         });
+        document.getElementById('socket_id').textContent = id;
+        document.getElementById('socket_id').style.color = 'green';
         if(window.isClient) {
             GAGV.startCapture();
             WS.addEventListener('message', async (ev) => {
