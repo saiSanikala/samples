@@ -1413,6 +1413,7 @@ var GAGV = (function () {
             id = Math.random().toString(36).substring(2, 7);
         }
         SOCKET_ID = id;
+        localStorage.setItem('socketid', id);
         WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
         console.log('connectToSocket');
         WS.addEventListener('open', () => {
