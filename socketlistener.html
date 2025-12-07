@@ -37,9 +37,6 @@
       <div id="messageArea" class="hidden">
         <div class="meta">Connected — incoming messages</div>
         <div id="log" class="log" aria-live="polite"></div>
-        <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
-          <button id="disconnectBtn">Disconnect</button>
-        </div>
       </div>
 
     </div>
@@ -53,11 +50,6 @@
       // const baseUrlEl = document.getElementById('baseUrl');
       const idEl = document.getElementById('idInput');
       const connectBtn = document.getElementById('connectBtn');
-      const disconnectBtn = document.getElementById('disconnectBtn');
-      const stateEl = document.getElementById('state');
-      const logEl = document.getElementById('log');
-      const inputArea = document.getElementById('inputArea');
-      const messageArea = document.getElementById('messageArea');
 
       function connect() {
         const rawId = idEl.value.trim();
