@@ -255,6 +255,8 @@
   <header>
     <h1>XHR / HAR Viewer</h1>
     <input type="file" id="fileInput" accept=".json,.har" multiple/>
+    <input type="text" id="startTime" placeholder="hh:mm:ss"/>
+    <input type="text" id="endTime" placeholder="hh:mm:ss"/>
     <button id="report" class="report-button">show report</button>
   </header>
 
@@ -331,6 +333,8 @@
 
   <script>
     var ALL_LOGS = [];
+      var GA_EVENTS = [];
+      var GV_EVENTS = [];
     // -- same JS logic as before, adapted to this markup --
     const fileInput = document.getElementById("fileInput");
     const filterTextInput = document.getElementById("filterText");
@@ -401,15 +405,29 @@
       });
     }
 
+    function toSeconds(t) {
+      const [h, m, s] = t.split(':').map(Number);
+      return h * 3600 + m * 60 + s;
+    }
+    function isGreater(a, b) {
+      return toSeconds(a) > toSeconds(b);
+    }
+    function isLesser(a, b) {
+      return toSeconds(a) < toSeconds(b);
+    }
+    function isBetween(a, b, c) {
+      return ((toSeconds(b) > toSeconds(a)) && (toSeconds(b) < toSeconds(c)));
+    }
+
     function getGAGVReport() {
       if (ALL_LOGS.length <= 0)
         return;
       let gaEndPoint = "www.google-analytics.com/";
       let gvPriorityEndPoint = "priority/records";
       let gvBatchEndPoint = "batched/records";
-      let GA_EVENTS = [];
-      let GV_EVENTS = [];
       // let EVENT_BUCKET = [];
+      GA_EVENTS = [];
+      GV_EVENTS = [];
       ALL_LOGS.forEach(request => {
         if (request.url.includes(gaEndPoint)) {
           let data = request.raw?.request?.postData?.text || "{}";
@@ -435,85 +453,137 @@
           })
         }
       })
+
+      // start time
+      // end time
+      let startTime = document.getElementById('startTime').value || '0:0:0';
+      let endTime = document.getElementById('endTime').value || '23:59:59';
+
       const occurances = {};
+      let total = {
+        ga: 0,
+        priority: 0,
+        batch: 0
+      }
       GA_EVENTS.forEach(item => {
-        if (!occurances[item.evtName]) {
-          occurances[item.evtName] = { ga: 0, batch: 0, priority: 0 };
+        if(isBetween(startTime, item.ts, endTime)) {
+          if (!occurances[item.evtName]) {
+            occurances[item.evtName] = { ga: 0, batch: 0, priority: 0 };
+          }
+          occurances[item.evtName].ga++;
+          total.ga++;
         }
-        occurances[item.evtName].ga++;
       });
       GV_EVENTS.forEach(item => {
-        if (!occurances[item.evtName]) {
-          occurances[item.evtName] = { ga: 0, batch: 0, priority: 0 };
+        if(isBetween(startTime, item.ts, endTime)) {
+          if (!occurances[item.evtName]) {
+            occurances[item.evtName] = { ga: 0, batch: 0, priority: 0 };
+          }
+          if (item.type === 'P') {
+            occurances[item.evtName].priority++;
+            total.priority++;
+          } else {
+            occurances[item.evtName].batch++;
+            total.batch++;
+          }
         }
-        if (item.type === 'P')
-          occurances[item.evtName].priority++;
-        else
-          occurances[item.evtName].batch++;
       });
-      console.log(occurances);
+      occurances.total = total;
       showReport(occurances);
     }
 
     function showReport(data) {
-      let html = `<table border="1" cellpadding="5" cellspacing="0">
-                <thead>
-                    <tr>
-                        <th>Event Name</th>
-                        <th>GA</th>
-                        <th>Batch</th>
-                        <th>Priority</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-      Object.keys(data).forEach(key => {
-        const row = data[key];
-        html += `<tr>
-                    <td>${key}</td>
-                    <td>${row.ga}</td>
-                    <td>${row.batch}</td>
-                    <td>${row.priority}</td>
-                </tr>`;
-      });
-      html += `
-                </tbody>
-            </table>`;
-      const popup = document.createElement("div");
-      popup.id = "popupBox";
-      popup.style.position = "absolute";
-      popup.style.top = "25%";
-      popup.style.left = "25%";
-      popup.style.background = "white";
-      popup.style.padding = "20px";
-      popup.style.borderRadius = "8px";
-      popup.style.boxShadow = "0 0 20px rgba(0,0,0,0.3)";
-      popup.style.zIndex = "2147483647";
-      popup.style.width = "50%";
-      popup.style.display = "block";
-      popup.style.color = "black";
+  let html = `
+    <style>
+      #popupBox table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      #popupBox thead, 
+      #popupBox tbody {
+        display: block;
+      }
+      #popupBox tbody {
+        max-height: 300px;      /* Adjust scroll height */
+        overflow-y: auto;
+      }
+      #popupBox thead tr, 
+      #popupBox tbody tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+      }
+      #popupBox th, #popupBox td {
+        padding: 6px;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+      }
+    </style>
 
-      // Create close button
-      const closeBtn = document.createElement("span");
-      closeBtn.innerHTML = "✖";
-      closeBtn.id = 'popup_close';
-      closeBtn.style.position = "absolute";
-      closeBtn.style.top = "8px";
-      closeBtn.style.right = "12px";
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.fontSize = "20px";
-      closeBtn.style.color = "#333";
+    <table>
+      <thead>
+        <tr>
+          <th>Event Name</th>
+          <th>GA</th>
+          <th>Batch</th>
+          <th>Priority</th>
+        </tr>
+      </thead>
+      <tbody>`;
 
-      closeBtn.onclick = () => popup.remove();
+  Object.keys(data).forEach(key => {
+    const row = data[key];
+    html += `
+      <tr>
+        <td>${key}</td>
+        <td>${row.ga}</td>
+        <td>${row.batch}</td>
+        <td>${row.priority}</td>
+      </tr>`;
+  });
 
-      // Add content
-      const content = document.createElement("div");
-      content.innerHTML = html;
+  html += `
+      </tbody>
+    </table>
+  `;
 
-      // Append everything
-      popup.appendChild(closeBtn);
-      popup.appendChild(content);
-      document.body.appendChild(popup);
-    }
+  const popup = document.createElement("div");
+  popup.id = "popupBox";
+  popup.style.position = "absolute";
+  popup.style.top = "25%";
+  popup.style.left = "25%";
+  popup.style.background = "white";
+  popup.style.padding = "20px";
+  popup.style.borderRadius = "8px";
+  popup.style.boxShadow = "0 0 20px rgba(0,0,0,0.3)";
+  popup.style.zIndex = "2147483647";
+  popup.style.width = "50%";
+  popup.style.display = "block";
+  popup.style.color = "black";
+
+  // Close button
+  const closeBtn = document.createElement("span");
+  closeBtn.innerHTML = "✖";
+  closeBtn.id = 'popup_close';
+  closeBtn.style.position = "absolute";
+  closeBtn.style.top = "8px";
+  closeBtn.style.right = "12px";
+  closeBtn.style.cursor = "pointer";
+  closeBtn.style.fontSize = "20px";
+  closeBtn.style.color = "#333";
+  closeBtn.style.zIndex = "123";
+
+  closeBtn.onclick = () => popup.remove();
+
+  // Add content
+  const content = document.createElement("div");
+  content.innerHTML = html;
+
+  popup.appendChild(closeBtn);
+  popup.appendChild(content);
+  document.body.appendChild(popup);
+}
+
 
     function formatGAData(data) {
       let payload = {
