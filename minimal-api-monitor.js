@@ -6,6 +6,15 @@
 
 (function () {
   // don't reinstall
+
+
+  (async () => {
+        try {
+          await loadScriptOnce('./polyfills.js', null, 2000);
+        } catch (err) {
+          console.error(err);
+        }
+  })();
   try {
     if (window.__apiMonitor && window.__apiMonitor._minimalInstalled && window.__apiMonitor._dispatchPatched) {
       try { console.info && console.info('minimal api-monitor with dispatch already installed'); } catch (e) {}
