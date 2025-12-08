@@ -431,6 +431,7 @@
             let evtPayload = formatGVData(record);
             evtPayload.ts = new Date(request.started).toLocaleTimeString();
             evtPayload.type = 'B';
+            GV_EVENTS.push(evtPayload);
           })
         }
       })
