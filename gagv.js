@@ -3,11 +3,12 @@
 
 
 
-    // establish socket connection.
-    var WS = '';
-    var WS_LIVE = false;
-    var SOCKET_ID = '';
-
+// establish socket connection.
+var WS = '';
+var WS_LIVE = false;
+var SOCKET_ID = '';
+var STATUS = 'Idle';
+var SOCKET_QUE = [];
 var GAGV = (function () {
     if (window.__compareMonitorInstalled) return;
     window.__compareMonitorInstalled = true;
@@ -117,9 +118,9 @@ var GAGV = (function () {
         }, el('div', { id: TABLE_ID, style: { width: '100%' } }));
 
         card.appendChild(header);
-        if(window.isClient) {
+        if (window.isClient) {
             var report = el('button', { id: 'compare_view', style: { padding: '8px 12px' } }, 'Reports');
-            report.addEventListener('click', function(){
+            report.addEventListener('click', function () {
                 compareControl('compare');
             })
             card.appendChild(report);
@@ -131,11 +132,11 @@ var GAGV = (function () {
         return overlay;
     }
 
-    function showOverlay() { 
-        ensureOverlay().style.display = 'block'; 
-        if(!window.isClient) 
+    function showOverlay() {
+        ensureOverlay().style.display = 'block';
+        if (!window.isClient)
             connectToSocket();
-        }
+    }
     function hideOverlay() { const ov = document.getElementById(OVERLAY_ID); if (ov) ov.style.display = 'none'; }
 
     // Table skeleton: S.No | GA | GV | EventID | P | C
@@ -145,16 +146,31 @@ var GAGV = (function () {
         tableRoot.innerHTML = '';
 
         const table = el('table', { style: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' } });
-        const thead = el('thead', {},
-            el('tr', {},
-                el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '6%' } }, 'S.No'),
-                el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '36%' } }, 'GA'),
-                el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '20%' } }, 'GV'),
-                el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '18%' } }, 'EventID'),
-                el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '10%' } }, 'P'),
-                el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '10%' } }, 'B')
-            )
-        );
+        var thead = '';
+        if (window.isClient)
+            thead = el('thead', {},
+                el('tr', {},
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '5%' } }, 'S.No'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '10%' } }, 'GA TS'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '32.5%' } }, 'GA'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '10%' } }, 'GV TS'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '32.5%' } }, 'GV'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '20%' } }, 'EventID'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '5%' } }, 'P'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '5%' } }, 'B')
+                )
+            );
+        else
+            thead = el('thead', {},
+                el('tr', {},
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '5%' } }, 'S.No'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '32.5%' } }, 'GA'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '32.5%' } }, 'GV'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '20%' } }, 'EventID'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '5%' } }, 'P'),
+                    el('th', { style: { color: 'black', textAlign: 'center', padding: '6px', borderBottom: '1px solid #ddd', width: '5%' } }, 'B')
+                )
+            );
         table.appendChild(thead);
         const tbody = el('tbody', { id: TBODY_ID });
         table.appendChild(tbody);
@@ -546,7 +562,7 @@ var GAGV = (function () {
             const singleName = extractEvtNameFromEventObject(single);
             if (window.isClient && window.GV_PAYLOAD.length >= 20)
                 window.GV_PAYLOAD.shift();
-            window.GV_PAYLOAD.push(single);
+            window.GV_PAYLOAD.push({ singleName, payload: single, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl });
             const newPayload = transformGVforGA(single);
             const sourceType = (typeof rawUrl === 'string' && rawUrl.toLowerCase().includes(ENDPOINT_C_FRAGMENT)) ? 'C' : 'B';
             const eventId = getEventIdFromPayload(newPayload) || '';
@@ -566,7 +582,6 @@ var GAGV = (function () {
 
             // Update counts for all rows (P/C counts are event_id-based)
             for (const r of state.rows) refreshRowPB(r);
-
             // Try to match: prefer A rows which are unmatched and either items-array matches or simply same evtName
             const bHasItems = Array.isArray(getItemsArray(item.payload));
             let matchRow = null;
@@ -603,7 +618,7 @@ var GAGV = (function () {
                     renderCompareForIndex(state.compareIndex);
                 }
                 scrollTableToBottom();
-            } else {
+            } else {//saikumar
                 state.queueB.push(item);
             }
         }
@@ -644,6 +659,21 @@ var GAGV = (function () {
         } else {
             row.cCell.textContent = String(cCount);
         }
+        // Update timestamps safely
+        if (window.isClient && row.GATS && row.aItem && row.aItem.ts) {
+            try {
+                row.GATS.textContent = new Date(row.aItem.ts).toLocaleTimeString();
+            } catch (e) {
+                row.GATS.textContent = '';
+            }
+        }
+        if (window.isClient && row.GVTS && row.bItem && row.bItem.ts) {
+            try {
+                row.GVTS.textContent = new Date(row.bItem.ts).toLocaleTimeString();
+            } catch (e) {
+                row.GVTS.textContent = '';
+            }
+        }
 
         // color: green if equal, red otherwise
         const color = (pCount === cCount) ? COLOR_GREEN : COLOR_RED;
@@ -659,10 +689,13 @@ var GAGV = (function () {
         const sn = state.rows.length + 1;
         const snCell = el('td', { style: { padding: '8px', verticalAlign: 'top', borderBottom: '1px solid #f0f0f0', width: '6%', fontWeight: 700, textAlign: 'center', color: 'black' } }, String(sn));
 
+        const GATS = el('td', { style: { padding: '8px', verticalAlign: 'top', borderBottom: '1px solid #f0f0f0', width: '6%', fontWeight: 700, textAlign: 'center', color: 'black' } }, '');
+
         const leftCell = el('td', { style: { padding: '8px', verticalAlign: 'top', borderBottom: '1px solid #f0f0f0', minHeight: '38px' } },
             el('div', { style: { fontWeight: 600, color: '#111' } }, escapeHtml(aItem.evtName))
         );
 
+        const GVTS = el('td', { style: { padding: '8px', verticalAlign: 'top', borderBottom: '1px solid #f0f0f0', width: '6%', fontWeight: 700, textAlign: 'center', color: 'black' } }, '');
         const rightCell = el('td', { style: { padding: '8px', verticalAlign: 'top', borderBottom: '1px solid #f0f0f0', minHeight: '38px' } }, '');
 
         // eventId cell (initially from A if present, otherwise blank; may be filled later from listB)
@@ -696,14 +729,26 @@ var GAGV = (function () {
             const cmp = compareMatchType(aItem.payload, bItem.payload);
             let colorStyle = cmp.fullMatch ? COLOR_GREEN : (cmp.looseMatchTypeDiff ? COLOR_GREEN : COLOR_ORANGE);
             leftCell.innerHTML = '';
+            if (window.isClient) {
+                try {
+                    GATS.textContent = new Date(aItem.ts).toLocaleTimeString();
+                    GVTS.textContent = new Date(bItem.ts).toLocaleTimeString();
+                } catch (e) {
+                    GATS.textContent = '';
+                    GVTS.textContent = '';
+                }
+            }
             leftCell.appendChild(el('div', { style: { fontWeight: 600, color: colorStyle } }, escapeHtml(aItem.evtName)));
             rightCell.appendChild(el('div', { style: { fontWeight: 600, color: colorStyle } }, escapeHtml(bItem.evtName)));
         }
-
-        const tr = el('tr', {}, snCell, leftCell, rightCell, eventIdCell, pCell, cCell);
+        var tr = '';
+        if (window.isClient)
+            tr = el('tr', {}, snCell, GATS, leftCell, GVTS, rightCell, eventIdCell, pCell, cCell);
+        else
+            tr = el('tr', {}, snCell, leftCell, rightCell, eventIdCell, pCell, cCell);
         tbody.appendChild(tr);
 
-        const rowObj = { sn, aItem, bItem: bItem || null, eventId: initialEventId || (bItem && bItem.event_id ? bItem.event_id : ''), tr, snCell, leftCell, rightCell, eventIdCell, pCell, cCell };
+        const rowObj = { sn, aItem, bItem: bItem || null, eventId: initialEventId || (bItem && bItem.event_id ? bItem.event_id : ''), tr, snCell, leftCell, rightCell, eventIdCell, pCell, cCell, GATS, GVTS };
         state.rows.push(rowObj);
         // We apply legend effects only to compare popup (not table rows), so do not alter row visibility here.
         // initialize P/C counts for this row
@@ -720,7 +765,7 @@ var GAGV = (function () {
     // ---------------- Event handling ----------------
     function handleApiEvent(evt) {
         try {
-            if(!window.isClient)
+            if (!window.isClient)
                 postMessageViaSocket(evt);
             if (!evt || !evt.url) return;
             const url = String(evt.url || '').toLowerCase();
@@ -739,7 +784,7 @@ var GAGV = (function () {
                 window.QA_JOURNEY.path.push({ event: evtName, screen: payload.events[0].params.ScreenName || '' });
                 if (window.isClient && window.GA_PAYLOAD.length >= 20)
                     window.GA_PAYLOAD.shift();
-                window.GA_PAYLOAD.push(payload);
+                window.GA_PAYLOAD.push({ evtName, payload: payload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url });
                 const newPayload = transformGAtoGV(payload);
                 const aItem = { evtName, payload: newPayload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url };
                 state.listA.push(aItem);
@@ -774,14 +819,18 @@ var GAGV = (function () {
 
     function refreshCounts(status) {
         status = status || '';
+        var currentStatus = state.running ? 'Monitoring' : 'Stopped';
+        if (currentStatus == STATUS)
+            return;
+        STATUS = currentStatus;
         const s = document.getElementById(STATUS_ID);
-        if(status != '') {
+        if (status != '') {
             s.textContent = status;
             return;
         }
         if (s) s.textContent = state.running ? 'Monitoring' : 'Stopped';
-        if(!window.isClient)
-            postMessageViaSocket({type: 'monitoring', statue: s.textContent});
+        if (!window.isClient)
+            postMessageViaSocket({ type: 'monitoring', status: s.textContent });
     }
 
     function startCapture() {
@@ -796,7 +845,7 @@ var GAGV = (function () {
         state.listA = []; state.listB = []; state.queueB = []; state.rows = []; state.compareIndex = 0;
         buildTableSkeleton();
         refreshCounts();
-        if(!window.isClient) {
+        if (!window.isClient) {
             if (!window.__apiMonitor || typeof window.__apiMonitor.onEvent !== 'function') {
                 const tableRoot = document.getElementById(TABLE_ID);
                 if (tableRoot) tableRoot.innerHTML = '<div style="color:#b00">ERROR: window.__apiMonitor not found. Include api-monitor.js before using this tool.</div>';
@@ -1405,53 +1454,73 @@ var GAGV = (function () {
         refreshCounts: refreshCounts
     };
 })();
-    function connectToSocket(id) {
-        id = id || localStorage.getItem('socketid') || '';
-        if(WS_LIVE)
-            return;
-        if(id == '') {
-            id = Math.random().toString(36).substring(2, 7);
-        }
-        SOCKET_ID = id;
-        localStorage.setItem('socketid', id);
-        WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
-        console.log('connectToSocket');
-        WS.addEventListener('open', () => {
-            WS_LIVE = true;
-            console.log('connected as: ' + id);
-            compareControl('show');
-        });
-        document.getElementById('socket_id').textContent = id;
-        document.getElementById('socket_id').style.color = 'green';
-        if(window.isClient) {
-            GAGV.startCapture();
-            WS.addEventListener('message', async (ev) => {
-                try {
-                    var payload = ev.data;
-                    if (payload instanceof Blob) {
-                        payload = await payload.text();
-                        payload = JSON.parse(payload);
-                        if(payload.type && payload.type == 'monitoring') {
-                            GAGV.refreshCounts(payload.status);
-                        } else
-                            GAGV.handleApiEvent(payload);
-                    }
-                } catch (err) {
-                    console.error('handleMessage error', err);
-                }
-            });
-        }
-    }
 
-    function postMessageViaSocket(msg) {
-        try {
-            var parseMessage = typeof msg == 'object' ? msg : JSON.parse(msg);
-            if(parseMessage.type && parseMessage.type == 'connected')
-                return;
-            if (msg && WS_LIVE) {
-                WS.send(JSON.stringify(msg));
-            }
-        } catch(e){
-            console.log('postMessageViaSocket: ' + e);
-        }
+function pushMessagesFromQue() {
+    debugger
+    while (SOCKET_QUE.length > 0) {
+        postMessageViaSocket(SOCKET_QUE[0], true);
+        SOCKET_QUE.shift();
     }
+}
+function connectToSocket(id) {
+    id = id || localStorage.getItem('socketid') || '';
+    if (WS_LIVE)
+        return;
+    if (id == '') {
+        id = Math.random().toString(36).substring(2, 7);
+    }
+    SOCKET_ID = id;
+    localStorage.setItem('socketid', id);
+    WS = new WebSocket('wss://socket-0akf.onrender.com/?id=' + id);
+    console.log('connectToSocket');
+    WS.addEventListener('open', () => {
+        WS_LIVE = true;
+        console.log('connected as: ' + id);
+        compareControl('show');
+        if(!window.isClient)
+            pushMessagesFromQue();
+    });
+    document.getElementById('socket_id').textContent = id;
+    document.getElementById('socket_id').style.color = 'green';
+    if (window.isClient) {
+        GAGV.startCapture();
+        WS.addEventListener('message', async (ev) => {
+            try {
+                var payload = ev.data;
+                if (payload instanceof Blob) {
+                    payload = await payload.text();
+                    payload = JSON.parse(payload);
+                    if (payload.type && payload.type == 'monitoring') {
+                        GAGV.refreshCounts(payload.status);
+                    } else
+                        GAGV.handleApiEvent(payload);
+                }
+            } catch (err) {
+                console.error('handleMessage error', err);
+            }
+        });
+    }
+}
+
+function postMessageViaSocket(msg, ignoreDeliveryStatus) {
+    ignoreDeliveryStatus = ignoreDeliveryStatus || false;
+    try {
+        var parseMessage = typeof msg == 'object' ? msg : JSON.parse(msg);
+        if (parseMessage.type && parseMessage.type == 'connected' || parseMessage.type == "pMetricsChange" || parseMessage.type == "build")
+            return;
+        if ((parseMessage.type && parseMessage.type == 'monitoring') || (parseMessage.kind && parseMessage.method == 'POST')) {
+            console.log('start sending' + msg + ' :: ' + WS_LIVE);
+            if (msg && WS_LIVE) {
+                console.log('sending: ' + JSON.stringify(msg));
+                WS.send(JSON.stringify(msg));
+                if(ignoreDeliveryStatus)
+                    console.log('sending now: ' + JSON.stringify(msg));
+            } else if(!ignoreDeliveryStatus){
+                console.log('add to que: ' + JSON.stringify(msg));
+                SOCKET_QUE.push(msg);
+            } else {}
+        }
+    } catch (e) {
+        console.log('postMessageViaSocket: ' + e);
+    }
+}
