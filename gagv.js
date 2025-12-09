@@ -1278,7 +1278,36 @@ var GAGV = (function () {
             resetLegendState();
             var data = getOccurances();
             // target.innerHTML = JSON.stringify(getOccurances());
-            let html = `<table border="1" cellpadding="5" cellspacing="0">
+            let html = `
+            <style>
+      #popupBox table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      #popupBox thead, 
+      #popupBox tbody {
+        display: block;
+      }
+      #popupBox tbody {
+        max-height: 90%;      /* Adjust scroll height */
+        overflow-y: auto;
+      }
+      #popupBox thead tr, 
+      #popupBox tbody tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+      }
+      #popupBox th, #popupBox td {
+        padding: 6px;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+        white-space: normal;
+        word-wrap: break-word;
+      }
+    </style>
+
+    <table border="1" cellpadding="5" cellspacing="0">
                 <thead>
                     <tr>
                         <th>Event Name</th>
@@ -1303,7 +1332,7 @@ var GAGV = (function () {
             const popup = document.createElement("div");
             popup.id = "popupBox";
             popup.style.position = "absolute";
-            popup.style.top = "25%";
+            popup.style.top = "10%";
             popup.style.left = "25%";
             popup.style.background = "white";
             popup.style.padding = "20px";
@@ -1638,7 +1667,7 @@ function connectToSocket(id) {
                         default:
                             break;
                     }
-                } else if(window.isClient)
+                } else if (window.isClient)
                     GAGV.handleApiEvent(payload);
             }
         } catch (err) {
