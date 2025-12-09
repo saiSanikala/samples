@@ -1651,7 +1651,15 @@ function connectToSocket(id) {
         try {
             var payload = ev.data;
             if (payload instanceof Blob) {
-                payload = await payload.text();
+                //payload = await payload.text();
+                if (payload instanceof Blob) {
+                // payload = await payload.text();
+                payload = await new Promise(function (resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function (e) { resolve(e.target.result); };
+                    reader.onerror = reject;
+                    reader.readAsText(payload);
+                });
                 payload = JSON.parse(payload);
                 if (window.isClient && payload.type && payload.type == 'monitoring') {
                     GAGV.refreshCounts(payload.status);
