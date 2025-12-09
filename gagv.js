@@ -3,6 +3,74 @@
 
 
 
+async function simulateKeydown(key, options = {}) {
+    // Key code mapping for common keys
+    const keyCodeMap = {
+        'Enter': 13,
+        'Escape': 27,
+        'Space': 32,
+        'ArrowUp': 38,
+        'ArrowDown': 40,
+        'ArrowLeft': 37,
+        'ArrowRight': 39,
+        'Tab': 9,
+        'Backspace': 8,
+        'Delete': 46,
+        'Home': 36,
+        'End': 35,
+        'PageUp': 33,
+        'PageDown': 34,
+        'F1': 112,
+        'F2': 113,
+        'F3': 114,
+        'F4': 115,
+        'F5': 116,
+        'F6': 117,
+        'F7': 118,
+        'F8': 119,
+        'F9': 120,
+        'F10': 121,
+        'F11': 122,
+        'F12': 123
+    };
+    const eventOptions = {
+        key: key,
+        code: key.length === 1 ? `Key${key.toUpperCase()}` : key,
+        keyCode: keyCodeMap[key] || key.charCodeAt(0),
+        which: keyCodeMap[key] || key.charCodeAt(0),
+        bubbles: true,
+        cancelable: true,
+        ...options
+    };
+
+    // Create and dispatch the keydown event on window
+    const keydownEvent = new KeyboardEvent('keydown', eventOptions);
+    window.dispatchEvent(keydownEvent);
+
+    // Also dispatch keypress for character keys
+    if (key.length === 1) {
+        const keypressEvent = new KeyboardEvent('keypress', eventOptions);
+        window.dispatchEvent(keypressEvent);
+    }
+
+    // Dispatch keyup event
+    const keyupEvent = new KeyboardEvent('keyup', eventOptions);
+    window.dispatchEvent(keyupEvent);
+}
+
+function waitForTimeout(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function triggerContinueWatch(n) {
+    for (i = 0; i < n; i++) {
+        postMessageViaSocket({ type: 'log', msg: `continue watch test iteration: ${i}` });
+        await simulateKeydown('Enter');
+        await waitForTimeout(18000);
+        await simulateKeydown('Backspace');
+        await waitForTimeout(3000);
+    }
+}
+
 // establish socket connection.
 var WS = '';
 var WS_LIVE = false;
@@ -18,6 +86,7 @@ var GAGV = (function () {
     const ENDPOINT_A_FRAGMENT = 'google-analytics.com/mp/collect';
     const ENDPOINT_B_FRAGMENT = 'evt.sonyliv.com/v2/smarttv/priority/records';
     const ENDPOINT_C_FRAGMENT = 'evt.sonyliv.com/v2/smarttv/batched/records';
+    const ENDPOINT_BEACON = 'api-godavari.sonyliv.com/beacon';
 
     // DOM ids
     const OVERLAY_ID = '__compare_overlay';
@@ -77,7 +146,7 @@ var GAGV = (function () {
                 position: 'fixed',
                 right: '0',
                 top: '0',
-                width: window.isClient ? '100%' : '50%',
+                width: window.isClient ? '97%' : '50%',
                 height: '100%',
                 background: 'rgba(255,255,255,0.02)',
                 zIndex: String(2147483647),
@@ -812,9 +881,73 @@ var GAGV = (function () {
                 refreshCounts();
                 return;
             }
+            try {
+                if (url.includes(ENDPOINT_BEACON)) {
+                    var raw = extractPayloadFromEvent(evt);
+                    const parsed = tryParseJsonSafe(raw);
+                    const payload = parsed.ok ? parsed.value : parsed.value || null;
+                    const evtName = payload.event.e || '';
+                    const wtd = payload.vsp ? (payload.vsp['vs-wtd'] || 'NA') : 'NA';
+                    const entry = { evtName, wtd, payload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url };
+                    window.BEACON_PAYLOAD.push(entry);
+                    // addBeaconEntry(entry);
+                    return;
+                }
+            } catch (e) { }
         } catch (e) {
             console.error('handleApiEvent error', e);
         }
+    }
+
+    // Call this for each entry: { evtName, wtd, payload, ts: Date.now() }
+    function addBeaconEntry(entry) {
+        const popup = getOrCreateBeaconPopup();
+        const line = document.createElement('div');
+
+        line.style.padding = '4px 8px';
+        line.style.whiteSpace = 'nowrap';
+
+        const time = formatTime(entry.ts);
+        const text = `[${time}] ${entry.evtName}  wtd=${entry.wtd}`;
+        line.textContent = text;
+
+        popup.appendChild(line);
+
+        // keep latest entry in view
+        popup.scrollTop = popup.scrollHeight;
+    }
+
+    // Create the popup if it doesn't exist, otherwise return it
+    function getOrCreateBeaconPopup() {
+        let popup = document.getElementById('beacon_popup');
+        if (popup) return popup;
+
+        popup = document.createElement('div');
+        popup.id = 'beacon_popup';
+
+        // Style: left side, full height, ~30% width, black bg, green text
+        popup.style.position = 'fixed';
+        popup.style.top = '0';
+        popup.style.left = '0';
+        popup.style.width = '30%';      // change to '50%' if you want half screen
+        popup.style.height = '100%';
+        popup.style.background = 'black';
+        popup.style.color = 'limegreen';
+        popup.style.fontFamily = 'monospace';
+        popup.style.fontSize = '12px';
+        popup.style.zIndex = '2147483647';
+        popup.style.overflowY = 'auto';
+        popup.style.padding = '6px';
+        popup.style.boxSizing = 'border-box';
+        document.body.appendChild(popup);
+        return popup;
+    }
+
+    // Format ts (ms) -> hh:mm:ss in local time
+    function formatTime(ts) {
+        const d = new Date(ts);
+        const pad = (n) => (n < 10 ? '0' + n : '' + n);
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
     function refreshCounts(status) {
@@ -841,6 +974,7 @@ var GAGV = (function () {
         };
         window.GA_PAYLOAD = [];
         window.GV_PAYLOAD = [];
+        window.BEACON_PAYLOAD = [];
         ensureOverlay();
         state.listA = []; state.listB = []; state.queueB = []; state.rows = []; state.compareIndex = 0;
         buildTableSkeleton();
@@ -1168,16 +1302,15 @@ var GAGV = (function () {
             </table>`;
             const popup = document.createElement("div");
             popup.id = "popupBox";
-            popup.style.position = "fixed";
-            popup.style.top = "50%";
-            popup.style.left = "50%";
-            popup.style.transform = "translate(-50%, -50%)";
+            popup.style.position = "absolute";
+            popup.style.top = "25%";
+            popup.style.left = "25%";
             popup.style.background = "white";
             popup.style.padding = "20px";
             popup.style.borderRadius = "8px";
             popup.style.boxShadow = "0 0 20px rgba(0,0,0,0.3)";
             popup.style.zIndex = "2147483647";
-            popup.style.minWidth = "250px";
+            popup.style.width = "50%";
             popup.style.display = "block";
             popup.style.color = "black";
 
@@ -1191,6 +1324,7 @@ var GAGV = (function () {
             closeBtn.style.cursor = "pointer";
             closeBtn.style.fontSize = "20px";
             closeBtn.style.color = "#333";
+            closeBtn.style.zIndex = "123";
 
             closeBtn.onclick = () => popup.remove();
 
@@ -1476,29 +1610,41 @@ function connectToSocket(id) {
         WS_LIVE = true;
         console.log('connected as: ' + id);
         compareControl('show');
-        if(!window.isClient)
+        if (!window.isClient)
             pushMessagesFromQue();
     });
     document.getElementById('socket_id').textContent = id;
     document.getElementById('socket_id').style.color = 'green';
     if (window.isClient) {
         GAGV.startCapture();
-        WS.addEventListener('message', async (ev) => {
-            try {
-                var payload = ev.data;
-                if (payload instanceof Blob) {
-                    payload = await payload.text();
-                    payload = JSON.parse(payload);
-                    if (payload.type && payload.type == 'monitoring') {
-                        GAGV.refreshCounts(payload.status);
-                    } else
-                        GAGV.handleApiEvent(payload);
-                }
-            } catch (err) {
-                console.error('handleMessage error', err);
-            }
-        });
     }
+    WS.addEventListener('message', async (ev) => {
+        try {
+            var payload = ev.data;
+            if (payload instanceof Blob) {
+                payload = await payload.text();
+                payload = JSON.parse(payload);
+                if (window.isClient && payload.type && payload.type == 'monitoring') {
+                    GAGV.refreshCounts(payload.status);
+                } else if (window.isClient && payload.type && payload.type == 'log') {
+                    console.log('server: ' + payload.msg);
+                } else if (!window.isClient && payload.type && payload.type == 'test') {
+                    switch (payload.method) {
+                        case 'continue_watch':
+                            triggerContinueWatch(payload.iterations);
+                            break;
+                        case 'menu_test':
+                            break;
+                        default:
+                            break;
+                    }
+                } else if(window.isClient)
+                    GAGV.handleApiEvent(payload);
+            }
+        } catch (err) {
+            console.error('handleMessage error', err);
+        }
+    });
 }
 
 function postMessageViaSocket(msg, ignoreDeliveryStatus) {
@@ -1507,17 +1653,15 @@ function postMessageViaSocket(msg, ignoreDeliveryStatus) {
         var parseMessage = typeof msg == 'object' ? msg : JSON.parse(msg);
         if (parseMessage.type && parseMessage.type == 'connected' || parseMessage.type == "pMetricsChange" || parseMessage.type == "build")
             return;
-        if ((parseMessage.type && parseMessage.type == 'monitoring') || (parseMessage.kind && parseMessage.method == 'POST')) {
-            console.log('start sending' + msg + ' :: ' + WS_LIVE);
+        var messageTypes = ['log', 'monitoring', 'test'];
+        if ((parseMessage.type && messageTypes.indexOf(parseMessage.type) >= 0) || (parseMessage.kind && parseMessage.method == 'POST')) {
+            // console.log('start sending pending messages: ' + msg + ' :: ' + WS_LIVE);
             if (msg && WS_LIVE) {
-                console.log('sending: ' + JSON.stringify(msg));
+                // console.log('sending: ' + JSON.stringify(msg));
                 WS.send(JSON.stringify(msg));
-                if(ignoreDeliveryStatus)
-                    console.log('sending now: ' + JSON.stringify(msg));
-            } else if(!ignoreDeliveryStatus){
-                console.log('add to que: ' + JSON.stringify(msg));
+            } else if (!ignoreDeliveryStatus) {
                 SOCKET_QUE.push(msg);
-            } else {}
+            } else { }
         }
     } catch (e) {
         console.log('postMessageViaSocket: ' + e);
