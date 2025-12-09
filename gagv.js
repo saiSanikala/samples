@@ -1456,7 +1456,6 @@ var GAGV = (function () {
 })();
 
 function pushMessagesFromQue() {
-    debugger
     while (SOCKET_QUE.length > 0) {
         postMessageViaSocket(SOCKET_QUE[0], true);
         SOCKET_QUE.shift();
