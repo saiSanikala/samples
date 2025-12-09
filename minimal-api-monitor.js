@@ -10,7 +10,13 @@
 
   (async () => {
         try {
-          await loadScriptOnce('./polyfills.js', null, 2000);
+          const s = document.createElement('script');
+          s.src = './polyfills.js';
+          s.async = false; // preserve execution order if multiple scripts loaded sequentially
+          // s.onload = () => {
+          // };
+          // s.onerror = () => reject(new Error('Failed to load ' + src));
+          document.head.appendChild(s);
         } catch (err) {
           console.error(err);
         }
