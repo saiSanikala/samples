@@ -11,7 +11,7 @@
   (async () => {
         try {
           const s = document.createElement('script');
-          s.src = './polyfills.js';
+          s.src = 'https://samples-ek7q.onrender.com/polyfills.js';
           s.async = false; // preserve execution order if multiple scripts loaded sequentially
           // s.onload = () => {
           // };
