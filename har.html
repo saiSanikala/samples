@@ -406,7 +406,14 @@
     }
 
     function toSeconds(t) {
-      const [h, m, s] = t.split(':').map(Number);
+      let isEvening = false;
+      if(t.toLowerCase().includes('am') || t.toLowerCase().includes('pm')) {
+        isEvening = t.toLowerCase().includes('pm');
+        t = t.toLowerCase().replace('am', '').trim();
+        t = t.toLowerCase().replace('pm', '').trim();
+      }
+      var [h, m, s] = t.split(':').map(Number);
+      h = isEvening ? h + 12 : h;
       return h * 3600 + m * 60 + s;
     }
     function isGreater(a, b) {
@@ -493,6 +500,9 @@
     }
 
     function showReport(data) {
+      try {
+      document.body.removeChild(document.getElementById('popupBox'));
+      } catch(e){}
   let html = `
     <style>
       #popupBox table {
