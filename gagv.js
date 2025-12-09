@@ -1289,7 +1289,7 @@ var GAGV = (function () {
         display: block;
       }
       #popupBox tbody {
-        max-height: 90%;      /* Adjust scroll height */
+        max-height: 500px;      /* Adjust scroll height */
         overflow-y: auto;
       }
       #popupBox thead tr, 
