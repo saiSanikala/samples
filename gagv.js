@@ -68,11 +68,38 @@ async function simulateKeydown(key, options = {}) {
 }
 
 function waitForTimeout(ms) {
-    return new Promise(function(resolve) {
-        setTimeout(function() {
+    return new Promise(function (resolve) {
+        setTimeout(function () {
             resolve();
         }, ms);
     });
+}
+// pass an array of attributes, object
+// it will traverse through the object and returns it's value, else it will return false
+function findAttributes(attrs, obj) {
+    var result = {};
+
+    // initialize result with false
+    for (var i = 0; i < attrs.length; i++) {
+        result[attrs[i]] = false;
+    }
+
+    function search(o) {
+        if (o && typeof o === "object") {
+            for (var key in o) {
+                if (o.hasOwnProperty(key)) {
+                    // if this key is one of the attributes we want
+                    if (result.hasOwnProperty(key) && result[key] === false) {
+                        result[key] = o[key];
+                    }
+                    // recurse deeper
+                    search(o[key]);
+                }
+            }
+        }
+    }
+    search(obj);
+    return result;
 }
 
 async function triggerContinueWatch(n) {
@@ -84,6 +111,105 @@ async function triggerContinueWatch(n) {
         await waitForTimeout(3000);
     }
 }
+
+async function triggerPlayGroundSteps(steps) {
+    var isLastActionKey = false;
+    for (var i = 0; i < steps.length; i++) {
+        switch (steps[i].cmd) {
+            case 'press':
+                console.log('press');
+                if(isLastActionKey)
+                    await waitForTimeout(500);
+                await simulateKeydown(steps[i].key);
+                isLastActionKey = true;
+                break;
+            case 'wait':
+                console.log('wait');
+                await waitForTimeout(steps[i].ms);
+                isLastActionKey = false;
+                break;
+        }
+    }
+}
+
+
+// expected output {"cmd":"press","key":"enter","raw":"press enter","loop":1}
+// expected output {"cmd":"wait","ms":15000,"raw":"wait 15000","loop":1}
+async function formatPlayGroundSteps() {
+    var str = document.getElementById('playGround').value || '';
+    if (!str) return [];
+    try {
+        // str = str.toLowerCase();
+        var commandList = [];
+        var parts = str.split('\n');
+        for (var i = 0; i < parts.length; i++) {
+            var s = parts[i].trim();
+            if (s.length > 0) {
+                commandList.push(s);
+            }
+        }
+        // find the first "start N" and the first "end" after it
+        var startIndex = -1;
+        var repeatCount = 1;
+        for (var i = 0; i < commandList.length; i++) {
+            var m = commandList[i].match(/^start\s+(\d+)$/);
+            if (m) {
+                startIndex = i;
+                repeatCount = parseInt(m[1], 10) || 1;
+                break;
+            }
+        }
+        if (startIndex === -1) {
+            console.warn('No start found — nothing to repeat.');
+            return [];
+        }
+        var endIndex = -1;
+        for (var j = startIndex + 1; j < commandList.length; j++) {
+            if (commandList[j] === 'end') {
+                endIndex = j;
+                break;
+            }
+        }
+        if (endIndex === -1) {
+            console.warn('No end found — taking until end of input.');
+            endIndex = commandList.length;
+        }
+        // commands between start and end (exclusive)
+        var block = commandList.slice(startIndex + 1, endIndex);
+        // parse a single line into an instruction object
+        function parseLine(line) {
+            var parts = line.split(/\s+/);
+            if (parts[0] === 'press') {
+                // press <key>
+                return { cmd: 'press', key: parts.slice(1).join(' ') || null, raw: line };
+            }
+            if (parts[0] === 'wait') {
+                // wait <ms>
+                var ms = parseInt(parts[1], 10);
+                if (isNaN(ms)) ms = 0;
+                return { cmd: 'wait', ms: ms, raw: line };
+            }
+            // unknown command
+            return { cmd: 'unknown', text: line };
+        }
+        // generate instructions repeated repeatCount times
+        var instructions = [];
+        for (var rep = 0; rep < repeatCount; rep++) {
+            for (var k = 0; k < block.length; k++) {
+                var instr = parseLine(block[k]);
+                // annotate which loop iteration (1-based) and original index if useful
+                instr.loop = rep + 1;
+                instructions.push(instr);
+            }
+        }
+        // return instructions;
+        postMessageViaSocket({ type: 'command', list: instructions }, true);
+    } catch (e) {
+        console.error('illegal commands: ' + e);
+        return [];
+    }
+}
+
 
 
 // async function openL1Menu() {
@@ -116,6 +242,7 @@ var WS_LIVE = false;
 var SOCKET_ID = '';
 var STATUS = 'Idle';
 var SOCKET_QUE = [];
+window.MESSED = [];
 var GAGV = (function () {
     if (window.__compareMonitorInstalled) return;
     window.__compareMonitorInstalled = true;
@@ -459,6 +586,7 @@ var GAGV = (function () {
                 event_type: ev.type || '',
                 timestamp: payload.timestamp || ev.timestamp || ''
             };
+            out.context.SessionId = out.context.gv_SessionId || '';
             delete out.event_data.eventCategory;
             delete out.event_data.event_category;
             try {
@@ -672,6 +800,15 @@ var GAGV = (function () {
                 window.GV_PAYLOAD.shift();
             window.GV_PAYLOAD.push({ singleName, payload: single, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl });
             const newPayload = transformGVforGA(single);
+            if (rawUrl.toLowerCase().includes(ENDPOINT_B_FRAGMENT)) {
+                var searchResult = findAttributes(['GVUID'], newPayload);
+                if (!searchResult['GVUID']) {
+                    if (window.MESSED.hasOwnProperty(singleName))
+                        window.MESSED[singleName].GV++;
+                    else
+                        window.MESSED[singleName] = { GA: 0, GV: 1 };
+                }
+            }
             const sourceType = (typeof rawUrl === 'string' && rawUrl.toLowerCase().includes(ENDPOINT_C_FRAGMENT)) ? 'C' : 'B';
             const eventId = getEventIdFromPayload(newPayload) || '';
             const item = { evtName: singleName, payload: newPayload, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl, sourceType, event_id: eventId };
@@ -726,7 +863,7 @@ var GAGV = (function () {
                     renderCompareForIndex(state.compareIndex);
                 }
                 scrollTableToBottom();
-            } else {//saikumar
+            } else {
                 state.queueB.push(item);
             }
         }
@@ -893,6 +1030,13 @@ var GAGV = (function () {
                 if (window.isClient && window.GA_PAYLOAD.length >= 20)
                     window.GA_PAYLOAD.shift();
                 window.GA_PAYLOAD.push({ evtName, payload: payload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url });
+                let searchResult = findAttributes(['GVUID'], payload);
+                if (!searchResult['GVUID']) {
+                    if (window.MESSED.hasOwnProperty(evtName))
+                        window.MESSED[evtName].GA++;
+                    else
+                        window.MESSED[evtName] = { GA: 1, GV: 1 };
+                }
                 const newPayload = transformGAtoGV(payload);
                 const aItem = { evtName, payload: newPayload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url };
                 state.listA.push(aItem);
@@ -1725,6 +1869,9 @@ function connectToSocket(id) {
                         default:
                             break;
                     }
+                } else if (!window.isClient && payload.type && payload.type == 'command') {
+                    console.log('steps: ' + payload.list);
+                    triggerPlayGroundSteps(payload.list);
                 } else if (window.isClient)
                     GAGV.handleApiEvent(payload);
             }
@@ -1740,7 +1887,7 @@ function postMessageViaSocket(msg, ignoreDeliveryStatus) {
         var parseMessage = typeof msg == 'object' ? msg : JSON.parse(msg);
         if (parseMessage.type && parseMessage.type == 'connected' || parseMessage.type == "pMetricsChange" || parseMessage.type == "build")
             return;
-        var messageTypes = ['log', 'monitoring', 'test'];
+        var messageTypes = ['log', 'monitoring', 'test', 'command'];
         if ((parseMessage.type && messageTypes.indexOf(parseMessage.type) >= 0) || (parseMessage.kind && parseMessage.method == 'POST')) {
             // console.log('start sending pending messages: ' + msg + ' :: ' + WS_LIVE);
             if (msg && WS_LIVE) {
