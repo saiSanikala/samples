@@ -172,6 +172,43 @@
       border-radius: 6px;
       border: 1px solid #666;
     }
+
+    #playGround {
+      width: 50%;
+      height: 95%;
+      margin-top: 2%;
+
+    }
+    .textarea-wrapper {
+      position: relative;
+      display: inline-block; /* shrink to textarea width */
+      height: 50%;
+    }
+
+    .info-icon {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .info-icon .tooltip {
+      display: none;
+      position: absolute;
+      left: 25px;
+      top: -5px;
+      background: #333;
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      max-width: 450px;      /* limit width so long lines wrap */
+      white-space: normal;   /* allow wrapping */
+      z-index: 99;
+    }
+
+    .info-icon:hover .tooltip {
+      display: block;
+    }
+
   </style>
 </head>
 
@@ -204,6 +241,20 @@
       <button>settings</button>
       <button>details</button>
     </div>
+    <div class="textarea-wrapper">
+    <textarea id="playGround" type="textarea"></textarea>
+    <span class="info-icon">
+  ℹ️
+  <span class="tooltip">
+    NOTE: case sensitive<br>
+    start 2<br>
+    press ArrowDown/ArrowUp/ArrowRight/ArrowLeft/Enter/Backspace<br>
+    wait 10000<br>
+    end
+  </span>
+</span>
+</div>
+    <button class='steps' onclick="formatPlayGroundSteps()">run steps</button>
 
     <div class="bottom-input">
       <span>Iterations: </span><input id="iterations" type="number" placeholder="1">
@@ -226,12 +277,12 @@
       if (panel.classList.contains('open')) {
         toggle.textContent = '<';
         toggle.style.left = "50vw";   // move arrow to panel's right edge
-        if(overlay)
+        if (overlay)
           overlay.style.display = 'none';
       } else {
         toggle.textContent = '>';
         toggle.style.left = "0";      // stick to screen edge
-        if(overlay)
+        if (overlay)
           overlay.style.display = 'block';
       }
     }
@@ -247,7 +298,7 @@
 
     function continueWatch() {
       var iterations = document.getElementById('iterations').value || 1;
-      postMessageViaSocket({type: 'test', method: 'continue_watch', iterations: iterations});
+      postMessageViaSocket({ type: 'test', method: 'continue_watch', iterations: iterations });
     }
 
     (function () {
