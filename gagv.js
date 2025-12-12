@@ -33,15 +33,24 @@ async function simulateKeydown(key, options = {}) {
         'F11': 122,
         'F12': 123
     };
-    const eventOptions = {
+    var eventOptions = {
         key: key,
-        code: key.length === 1 ? `Key${key.toUpperCase()}` : key,
-        keyCode: keyCodeMap[key] || key.charCodeAt(0),
-        which: keyCodeMap[key] || key.charCodeAt(0),
+        code: (key.length === 1 ? "Key" + key.toUpperCase() : key),
+        keyCode: (keyCodeMap[key] ? keyCodeMap[key] : key.charCodeAt(0)),
+        which: (keyCodeMap[key] ? keyCodeMap[key] : key.charCodeAt(0)),
         bubbles: true,
-        cancelable: true,
-        ...options
+        cancelable: true
     };
+
+    // Merge extra options (manual merge instead of spread operator)
+    if (options && typeof options === "object") {
+        for (var prop in options) {
+            if (options.hasOwnProperty(prop)) {
+                eventOptions[prop] = options[prop];
+            }
+        }
+    }
+
 
     // Create and dispatch the keydown event on window
     const keydownEvent = new KeyboardEvent('keydown', eventOptions);
@@ -59,8 +68,13 @@ async function simulateKeydown(key, options = {}) {
 }
 
 function waitForTimeout(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(function(resolve) {
+        setTimeout(function() {
+            resolve();
+        }, ms);
+    });
 }
+
 async function triggerContinueWatch(n) {
     for (i = 0; i < n; i++) {
         postMessageViaSocket({ type: 'log', msg: `continue watch test iteration: ${i}` });
@@ -70,6 +84,31 @@ async function triggerContinueWatch(n) {
         await waitForTimeout(3000);
     }
 }
+
+
+// async function openL1Menu() {
+//     let menuOpen = false;
+//     while(!menuOpen) {
+//         await simulateKeydown('ArrowLeft');
+//         await waitForTimeout(500);
+//         let leftMenu = await locateByClass("sidebar-module__sidebarContainer__r9S3v");
+//         if (leftMenu.element().className.includes("menuFocused")){
+//             menuOpen = true;
+//         }
+//     }
+//     const homeItem = await locateByText('Home', {exact: true});
+//     // expect(homeItem).toBeVisible();
+//     if(!MENU_ITEMS.length)
+//         await getL1MenuItems();
+// }
+
+// get all menu items from L1 menu
+// async function getL1MenuItems() {
+//     const menuItems = await locateByClass('sidebar-module__menuItem__P31kr');
+//     for(var i = 0; i < menuItems.count(); i++){
+//         MENU_ITEMS.push(menuItems.element(i).textContent.trim());
+//     }
+// }
 
 // establish socket connection.
 var WS = '';
@@ -1624,6 +1663,19 @@ function pushMessagesFromQue() {
         SOCKET_QUE.shift();
     }
 }
+
+function readBlobAsText(blob) {
+    return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            resolve(e.target.result);
+        };
+        reader.onerror = reject;
+        reader.readAsText(blob);
+    });
+}
+
+
 function connectToSocket(id) {
     id = id || localStorage.getItem('socketid') || '';
     if (WS_LIVE)
@@ -1651,8 +1703,6 @@ function connectToSocket(id) {
         try {
             var payload = ev.data;
             if (payload instanceof Blob) {
-                //payload = await payload.text();
-                if (payload instanceof Blob) {
                 // payload = await payload.text();
                 payload = await new Promise(function (resolve, reject) {
                     var reader = new FileReader();
