@@ -614,6 +614,7 @@ var GAGV = (function () {
                 if (out.eventId) out.event_id = out.eventId;
                 else if (out.id) out.event_id = out.id;
             }
+            out.context.gv_SessionId = out.context.SessionId || '';
             return deepSort(out);
         } catch (e) {
             return payload;
