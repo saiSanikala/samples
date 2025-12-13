@@ -179,14 +179,18 @@
       margin-top: 2%;
 
     }
+
     .textarea-wrapper {
       position: relative;
-      display: inline-block; /* shrink to textarea width */
+      display: inline-block;
+      /* shrink to textarea width */
       height: 50%;
     }
 
     .info-icon {
-      position: relative;
+      position: absolute;
+      top: 2%;
+      left: 48%;
       cursor: pointer;
     }
 
@@ -200,8 +204,10 @@
       padding: 8px 10px;
       border-radius: 6px;
       font-size: 12px;
-      max-width: 450px;      /* limit width so long lines wrap */
-      white-space: normal;   /* allow wrapping */
+      max-width: 450px;
+      /* limit width so long lines wrap */
+      white-space: normal;
+      /* allow wrapping */
       z-index: 99;
     }
 
@@ -209,6 +215,35 @@
       display: block;
     }
 
+    .steps {
+      top: 50%;
+      position: absolute;
+    }
+
+    /* Labels */
+    .label-container {
+      margin-top: 3%;
+    }
+
+    .label {
+      display: inline-block;
+      background: #e4e4e4;
+      padding: 5px 10px;
+      border-radius: 15px;
+      margin-right: 5px;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .label .close-btn {
+      margin-left: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #labelInput {
+      width: 50%;
+    }
   </style>
 </head>
 
@@ -242,22 +277,29 @@
       <button>details</button>
     </div>
     <div class="textarea-wrapper">
-    <textarea id="playGround" type="textarea"></textarea>
-    <span class="info-icon">
-  ℹ️
-  <span class="tooltip">
-    NOTE: case sensitive<br>
-    start 2<br>
-    press ArrowDown/ArrowUp/ArrowRight/ArrowLeft/Enter/Backspace<br>
-    wait 10000<br>
-    end
-  </span>
-</span>
-</div>
+      <textarea id="playGround" type="textarea"></textarea>
+      <span class="info-icon">
+        ℹ️
+        <span class="tooltip">
+          NOTE: case sensitive<br>
+          start 2<br>
+          press ArrowDown/ArrowUp/ArrowRight/ArrowLeft/Enter/Backspace<br>
+          wait 10000<br>
+          end
+        </span>
+      </span>
     <button class='steps' onclick="formatPlayGroundSteps()">run steps</button>
+    </div>
+      <!-- Input + Add + Done -->
+      <div class="label-controls">
+        <input id="labelInput" type="text" placeholder="event name => press enter" />
+        <button onclick="finishLabels()">Done</button>
+      </div>
 
+      <!-- Where labels appear -->
+      <div id="labelContainer" class="label-container"></div>
     <div class="bottom-input">
-      <span>Iterations: </span><input id="iterations" type="number" placeholder="1">
+      <span>Iterations: </span><input id="iterations" type="number" placeholder="1" value=1>
     </div>
   </div>
 
@@ -317,6 +359,58 @@
       }
       connectBtn.addEventListener('click', connect);
     })();
+
+
+
+    var labels = [];
+
+    function addLabel() {
+      var input = document.getElementById("labelInput");
+      var value = input.value.trim();
+      if (!value) return;
+
+      labels.push(value);
+      renderLabels();
+
+      input.value = ""; // clear input
+    }
+
+    function removeLabel(index) {
+      labels.splice(index, 1);
+      renderLabels();
+    }
+
+    function renderLabels() {
+      var container = document.getElementById("labelContainer");
+      container.innerHTML = "";
+
+      for (var i = 0; i < labels.length; i++) {
+        var div = document.createElement("div");
+        div.className = "label";
+        div.innerHTML =
+          labels[i] +
+          ' <span class="close-btn" onclick="removeLabel(' +
+          i +
+          ')">&times;</span>';
+
+        container.appendChild(div);
+      }
+    }
+
+    function finishLabels() {
+      console.log("Final labels:", labels);
+      window.ignoreEvents = labels || [];
+    }
+
+    // Add label when pressing Enter
+    document
+      .getElementById("labelInput")
+      .addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addLabel();
+        }
+      });
   </script>
 </body>
 
