@@ -147,6 +147,7 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      margin-top: 2%;
     }
 
     .buttons-row button {
@@ -270,6 +271,10 @@
     </div>
   </div>
   <div id="sidePanel">
+    <div class="buttons-row">
+      <button onclick="fetchLog()">fetch logs</button>
+      <button onclick="fetchNetowrk()">fetch network</button>
+    </div>
     <div class="buttons-row">
       <button onclick="continueWatch()">continue watch</button>
       <button>subscribe nudge</button>
@@ -401,6 +406,16 @@
       console.log("Final labels:", labels);
       window.ignoreEvents = labels || [];
       postMessageViaSocket({ type: 'ignore', msg: window.ignoreEvents });
+    }
+
+    function fetchLog(){
+      window.fetchLog = true;
+      postMessageViaSocket({ type: 'command', list: 'fetchLog' }, true);
+    }
+
+    function fetchNetowork(){
+      window.fetchNetwork = true;
+      postMessageViaSocket({ type: 'command', list: 'fetchNetwork' }, true);
     }
 
     // Add label when pressing Enter
