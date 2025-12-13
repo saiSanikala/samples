@@ -1062,11 +1062,10 @@ var GAGV = (function () {
                 postMessageViaSocket(evt);
             if (!evt || !evt.url) return;
             const url = String(evt.url || '').toLowerCase();
-            if(window.fetchNetwork) {
+            if(!window.isClient && window.fetchNetwork) {
                 var args = "🌐" + evt.url + " :: " + evt.method + " :: " + evt.status;
                 postMessageViaSocket({ type: 'log', msg: args });
             }
-            // Endpoint A
             if (url.includes(ENDPOINT_A_FRAGMENT)) {
                 const raw = extractPayloadFromEvent(evt);
                 const parsed = tryParseJsonSafe(raw);
@@ -1099,7 +1098,6 @@ var GAGV = (function () {
                 return;
             }
 
-            // Endpoint B
             if (url.includes(ENDPOINT_B_FRAGMENT)) {
                 const raw = extractPayloadFromEvent(evt);
                 const parsed = tryParseJsonSafe(raw);
@@ -1109,7 +1107,6 @@ var GAGV = (function () {
                 return;
             }
 
-            // Endpoint C
             if (url.includes(ENDPOINT_C_FRAGMENT)) {
                 const raw = extractPayloadFromEvent(evt);
                 const parsed = tryParseJsonSafe(raw);
@@ -1125,8 +1122,12 @@ var GAGV = (function () {
                     const payload = parsed.ok ? parsed.value : parsed.value || null;
                     const evtName = payload.event.e || '';
                     const wtd = payload.vsp ? (payload.vsp['vs-wtd'] || 'NA') : 'NA';
-                    const entry = { evtName, wtd, payload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url };
+                    const entry = { evtName, wtd, payload, ts: new Date(evt.startedAt), parsedOk: parsed.ok, sourceUrl: evt.url };
                     window.BEACON_PAYLOAD.push(entry);
+                    if(window.isClient) {
+                        console.log('BEACON: ' + JSON.stringify({ evtName, wtd, ts: new Date(evt.startedAt) }));
+                        // postMessageViaSocket({ type: 'log', msg: args });
+                    }
                     // addBeaconEntry(entry);
                     return;
                 }
