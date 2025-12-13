@@ -797,7 +797,7 @@ var GAGV = (function () {
 
         for (const single of candidates) {
             const singleName = extractEvtNameFromEventObject(single);
-            if (window.ignoreEvents.indexOf(singleName) >= 0) {
+            if (window.ignoreEvents && window.ignoreEvents.indexOf(singleName) >= 0) {
                 return;
             }
             if (window.isClient && window.GV_PAYLOAD.length >= 20)
@@ -1030,7 +1030,7 @@ var GAGV = (function () {
                     else if (payload && typeof payload.event_name === 'string') evtName = payload.event_name;
                     else evtName = extractEvtNameFromEventObject(payload);
                 } catch (e) { }
-                if (window.ignoreEvents.indexOf(evtName) >= 0) {
+                if (window.ignoreEvents && window.indexOf(evtName) >= 0) {
                     return;
                 }
                 window.QA_JOURNEY.path.push({ event: evtName, screen: payload.events[0].params.ScreenName || '' });
@@ -1879,6 +1879,8 @@ function connectToSocket(id) {
                 } else if (!window.isClient && payload.type && payload.type == 'command') {
                     console.log('steps: ' + payload.list);
                     triggerPlayGroundSteps(payload.list);
+                } else if(!window.isClient && payload.type && payload.type == 'ignore') {
+                    window.ignoreEvents = payload.msg || [];
                 } else if (window.isClient)
                     GAGV.handleApiEvent(payload);
             }
