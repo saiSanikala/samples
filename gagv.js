@@ -123,7 +123,11 @@ function captureLogs() {
             // overwrite
             console[method] = function () {
                 // custom prefix message
-                postMessageViaSocket({ type: 'log', msg: arguments });
+                var args = [];
+                for (var j = 0; j < arguments.length; j++) {
+                args.push(arguments[j]);
+                }
+                postMessageViaSocket({ type: 'log', msg: args });
                 // call original method with arguments
                 original[method].apply(console, arguments);
             };
