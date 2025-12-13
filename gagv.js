@@ -149,6 +149,8 @@ function captureLogs() {
 async function triggerPlayGroundSteps(steps) {
     var isLastActionKey = false;
     if (steps == 'fetchLog') {
+        if(window.fetchLog)
+            return;
         window.fetchLog = true;
         captureLogs();
         return;
