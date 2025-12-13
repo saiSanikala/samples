@@ -2,7 +2,8 @@
 // wss://socket-0akf.onrender.com/?id=sai
 
 
-
+window.fetchLog = false;
+window.fetchNetwork = false;
 async function simulateKeydown(key, options = {}) {
     // Key code mapping for common keys
     const keyCodeMap = {
@@ -112,8 +113,35 @@ async function triggerContinueWatch(n) {
     }
 }
 
+function captureLogs() {
+    var methods = ["log", "info", "warn", "error"];
+    var original = {};
+    for (var i = 0; i < methods.length; i++) {
+        (function (method) {
+            // store original console method
+            original[method] = console[method];
+            // overwrite
+            console[method] = function () {
+                // custom prefix message
+                postMessageViaSocket({ type: 'log', msg: arguments });
+                // call original method with arguments
+                original[method].apply(console, arguments);
+            };
+        })(methods[i]);
+    }
+    return;
+}
+
 async function triggerPlayGroundSteps(steps) {
     var isLastActionKey = false;
+    if (steps == 'fetchLog') {
+        window.fetchLog = true;
+        captureLogs();
+        return;
+    } else if (steps == 'fetchNetwork') {
+        window.fetchNetwork = true;
+        return;
+    }
     for (var i = 0; i < steps.length; i++) {
         switch (steps[i].cmd) {
             case 'press':
@@ -1879,7 +1907,7 @@ function connectToSocket(id) {
                 } else if (!window.isClient && payload.type && payload.type == 'command') {
                     console.log('steps: ' + payload.list);
                     triggerPlayGroundSteps(payload.list);
-                } else if(!window.isClient && payload.type && payload.type == 'ignore') {
+                } else if (!window.isClient && payload.type && payload.type == 'ignore') {
                     window.ignoreEvents = payload.msg || [];
                 } else if (window.isClient)
                     GAGV.handleApiEvent(payload);
