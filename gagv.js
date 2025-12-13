@@ -132,7 +132,7 @@ function captureLogs() {
                         args.push('⚠️');
                         break;
                     case 'error':
-                        args.push('❌');
+                        args.push('❗');
                         break;
                 }
                 for (var j = 0; j < arguments.length; j++) {
@@ -1060,7 +1060,10 @@ var GAGV = (function () {
                 postMessageViaSocket(evt);
             if (!evt || !evt.url) return;
             const url = String(evt.url || '').toLowerCase();
-
+            if(window.fetchNetwork) {
+                var args = "🌐" + evt.url + " :: " + evt.method + " :: " + evt.status;
+                postMessageViaSocket({ type: 'log', msg: args });
+            }
             // Endpoint A
             if (url.includes(ENDPOINT_A_FRAGMENT)) {
                 const raw = extractPayloadFromEvent(evt);
