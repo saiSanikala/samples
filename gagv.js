@@ -118,17 +118,27 @@ function captureLogs() {
     var original = {};
     for (var i = 0; i < methods.length; i++) {
         (function (method) {
-            // store original console method
             original[method] = console[method];
-            // overwrite
             console[method] = function () {
-                // custom prefix message
                 var args = [];
+                switch(method){
+                    case 'log':
+                        args.push('📝');
+                        break;
+                    case 'info':
+                        args.push('ℹ️');
+                        break;
+                    case 'warn':
+                        args.push('⚠️');
+                        break;
+                    case 'error':
+                        args.push('❌');
+                        break;
+                }
                 for (var j = 0; j < arguments.length; j++) {
-                args.push(arguments[j]);
+                    args.push(arguments[j]);
                 }
                 postMessageViaSocket({ type: 'log', msg: args });
-                // call original method with arguments
                 original[method].apply(console, arguments);
             };
         })(methods[i]);
