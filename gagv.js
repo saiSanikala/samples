@@ -1125,8 +1125,7 @@ var GAGV = (function () {
                     const entry = { evtName, wtd, payload, ts: new Date(evt.startedAt), parsedOk: parsed.ok, sourceUrl: evt.url };
                     window.BEACON_PAYLOAD.push(entry);
                     if(window.isClient) {
-                        console.log('BEACON: ' + JSON.stringify({ evtName, wtd, ts: new Date(evt.startedAt) }));
-                        // postMessageViaSocket({ type: 'log', msg: args });
+                        console.log('BEACON: ' + evtName + " :: " + wtd + " :: " + new Date(evt.startedAt).toLocaleTimeString());
                     }
                     // addBeaconEntry(entry);
                     return;
