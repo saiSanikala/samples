@@ -118,7 +118,7 @@ async function triggerPlayGroundSteps(steps) {
         switch (steps[i].cmd) {
             case 'press':
                 console.log('press');
-                if(isLastActionKey)
+                if (isLastActionKey)
                     await waitForTimeout(500);
                 await simulateKeydown(steps[i].key);
                 isLastActionKey = true;
@@ -797,6 +797,9 @@ var GAGV = (function () {
 
         for (const single of candidates) {
             const singleName = extractEvtNameFromEventObject(single);
+            if (window.ignoreEvents.indexOf(singleName) >= 0) {
+                return;
+            }
             if (window.isClient && window.GV_PAYLOAD.length >= 20)
                 window.GV_PAYLOAD.shift();
             window.GV_PAYLOAD.push({ singleName, payload: single, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl });
@@ -1027,6 +1030,9 @@ var GAGV = (function () {
                     else if (payload && typeof payload.event_name === 'string') evtName = payload.event_name;
                     else evtName = extractEvtNameFromEventObject(payload);
                 } catch (e) { }
+                if (window.ignoreEvents.indexOf(evtName) >= 0) {
+                    return;
+                }
                 window.QA_JOURNEY.path.push({ event: evtName, screen: payload.events[0].params.ScreenName || '' });
                 if (window.isClient && window.GA_PAYLOAD.length >= 20)
                     window.GA_PAYLOAD.shift();
