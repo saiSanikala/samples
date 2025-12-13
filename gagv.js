@@ -1910,7 +1910,7 @@ function connectToSocket(id) {
                 if (window.isClient && payload.type && payload.type == 'monitoring') {
                     GAGV.refreshCounts(payload.status);
                 } else if (window.isClient && payload.type && payload.type == 'log') {
-                    console.log('server: ' + payload.msg);
+                    console.log(payload.msg);
                 } else if (!window.isClient && payload.type && payload.type == 'test') {
                     switch (payload.method) {
                         case 'continue_watch':
