@@ -400,6 +400,7 @@
     function finishLabels() {
       console.log("Final labels:", labels);
       window.ignoreEvents = labels || [];
+      postMessageViaSocket({ type: 'ignore', msg: window.ignoreEvents });
     }
 
     // Add label when pressing Enter
