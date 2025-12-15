@@ -860,7 +860,7 @@ var GAGV = (function () {
             const sourceType = (typeof rawUrl === 'string' && rawUrl.toLowerCase().includes(ENDPOINT_C_FRAGMENT)) ? 'C' : 'B';
             const eventId = getEventIdFromPayload(newPayload) || '';
             const item = { evtName: singleName, payload: newPayload, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl, sourceType, event_id: eventId };
-            if(sourceType == 'B')
+            if(sourceType == 'C')
                 state.listB.push(item);
             // If there are rows with same evtName and no eventId yet, prefer to attach discovered event_id (helps linking)
             if (eventId) {
