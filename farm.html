@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Farm Dashboard</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background: #e5e7eb;
+    }
+  </style>
+</head>
+
+<body class="flex justify-center py-6">
+
+  <!-- Mobile frame -->
+  <div class="w-[390px] bg-white rounded-[32px] overflow-hidden shadow-xl relative">
+
+    <!-- Header -->
+    <div class="bg-emerald-600 text-white px-5 py-4 flex items-center justify-between">
+      <h1 class="text-lg font-semibold">Dashboard</h1>
+
+      <div class="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 01-6 0" />
+        </svg>
+        <span class="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full px-1">
+          2
+        </span>
+      </div>
+    </div>
+
+    <!-- Welcome Banner -->
+    <div class="bg-gradient-to-r from-emerald-100 to-emerald-50 px-5 py-6">
+      <h2 class="text-xl font-semibold text-gray-800">Welcome back!</h2>
+      <p class="text-sm text-gray-600 mt-1">Manage your farm efficiently</p>
+
+      <!-- Illustration placeholder -->
+      <div class="mt-4 h-24 bg-emerald-200 rounded-xl"></div>
+    </div>
+
+    <!-- Grid Menu -->
+    <div class="p-5 grid grid-cols-3 gap-4">
+
+      <!-- Card -->
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Dashboard</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Cattle</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Milk Production</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Health History</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Vaccinations</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Feed Management</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Breeding</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Reports</p>
+      </div>
+
+      <div class="bg-white border rounded-xl p-3 text-center shadow-sm">
+        <div class="h-12 bg-emerald-100 rounded-lg mb-2"></div>
+        <p class="text-sm font-medium">Settings</p>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <div class="absolute bottom-0 left-0 right-0 bg-white border-t flex justify-around py-3">
+      <div class="flex flex-col items-center text-emerald-600 text-xs">
+        <div class="w-6 h-6 bg-emerald-200 rounded"></div>
+        Home
+      </div>
+      <div class="flex flex-col items-center text-gray-400 text-xs">
+        <div class="w-6 h-6 bg-gray-200 rounded"></div>
+        Analytics
+      </div>
+      <div class="flex flex-col items-center text-gray-400 text-xs">
+        <div class="w-6 h-6 bg-gray-200 rounded"></div>
+        Tasks
+      </div>
+      <div class="flex flex-col items-center text-gray-400 text-xs">
+        <div class="w-6 h-6 bg-gray-200 rounded"></div>
+        Profile
+      </div>
+    </div>
+
+    <!-- Bottom safe space -->
+    <div class="h-16"></div>
+  </div>
+
+</body>
+</html>
