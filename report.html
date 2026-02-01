@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Issue Status Dashboard</title>
+
+    <!-- Chart.js CDN -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 24px;
+            background: #f6f7fb;
+        }
+
+        #totalReport {
+            top: 10%;
+            left: 0%;
+            position: relative;
+            display: flex;
+        }
+
+        .chartContainer {
+            /* display: flex; */
+            width: 65%;
+        }
+
+        .summary {
+            top: 10%;
+            right: 0%;
+            position: absolute;
+        }
+
+        #totalCount {
+            font-weight: normal;
+            margin: 2%;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+        }
+
+        select,
+        input {
+            padding: 6px 10px;
+        }
+
+        canvas {
+            min-width: 800px !important;
+            margin-top: 20px;
+        }
+
+        .countBox {
+            top: 0%;
+            position: relative;
+            font-weight: bold;
+            margin: 2%;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .checkbox-group label {
+            background: #f1f3f6;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .multi-select {
+            position: relative;
+            display: inline-block;
+        }
+
+        .checkbox-panel {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            min-width: 220px;
+            max-height: 240px;
+            overflow-y: auto;
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+            z-index: 1000;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .checkbox-panel label {
+            display: block;
+            margin-bottom: 6px;
+            cursor: pointer;
+        }
+
+        #progressChart {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>📊 Issue Status Dashboard</h2>
+
+    <div class="controls">
+        <input type="file" id="fileInput" accept=".json" />
+        <select id="severityFilter">
+            <option value="ALL">All Severities</option>
+        </select>
+        <!-- <select id="labelFilter" class="checkbox-group">
+            <option value="ALL">All Labels</option>
+        </select> -->
+        <div class="multi-select">
+            <button id="labelBtn" type="button">Labels ▼</button>
+            <div id="labelFilter" class="checkbox-panel hidden"></div>
+        </div>
+
+        <div class="multi-select">
+            <button id="statusBtn" type="button">Status ▼</button>
+            <div id="statusFilter" class="checkbox-panel hidden"></div>
+        </div>
+
+    </div>
+    <div class="countBox">Total Issues: <span id="totalCount"></span></div>
+    <div id="totalReport">
+        <div class="chartContainer">
+            <div id="chart"></div>
+            <div id="catChart"></div>
+        </div>
+        <div class="summary">
+            <div id="fe-player"></div>
+        </div>
+    </div>
+    <div id="progressChart"></div>
+    <script>
+        let isLaunch = true;
+        let rawData = [];
+        let currentList = {};
+        let uniqueLabels = [];
+        let chart;
+        let catChart;
+        let FEPlayerChart;
+        let filteredData = [];
+        let chartTimer = 0;
+        const btn = document.getElementById("labelBtn");
+        const panel = document.getElementById("labelFilter");
+        const statusBtn = document.getElementById("statusBtn");
+        const statusPanel = document.getElementById("statusFilter");
+
+        btn.addEventListener("click", () => {
+            panel.classList.toggle("hidden");
+        });
+        statusBtn.addEventListener("click", () => {
+            statusPanel.classList.toggle("hidden");
+        });
+
+        // click outside → close
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest(".multi-select")) {
+                panel.classList.add("hidden");
+            }
+        });
+
+        function processData(rawData) {
+            normalizeLabels(rawData);
+            populateSeverityDropdown(rawData);
+            populateLabelDropdown(rawData);
+            populateStatusDropdown(rawData);
+            // updateChart();
+            clearTimeout(chartTimer);
+            chartTimer = 0;
+            chartTimer = setTimeout(updateChart, 500);
+        }
+
+        // ---------- File Upload ----------
+        document.getElementById("fileInput").addEventListener("change", e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                rawData = JSON.parse(reader.result);
+                processData(rawData);
+            };
+            reader.readAsText(file);
+        });
+
+        // ---------- Normalize Labels ----------
+        function normalizeLabels(data) {
+            uniqueLabels = [];
+            data.forEach(item => {
+                const labels = [];
+                Object.keys(item).forEach(k => {
+                    if (k.startsWith("Labels") && item[k]) {
+                        labels.push(item[k]);
+                        if (uniqueLabels.indexOf(item[k]) <= 0)
+                            uniqueLabels.push(item[k]);
+                    }
+                });
+                item.Labels = labels;
+            });
+        }
+
+        // ---------- Populate Dropdown ----------
+        function populateSeverityDropdown(data) {
+            const select = document.getElementById("severityFilter");
+            const severities = new Set(
+                data.map(d => d["Custom field (Severity)"])
+            );
+            select.innerHTML = '<option value="ALL">All Severities</option>';
+            severities.forEach(s => {
+                const opt = document.createElement("option");
+                opt.value = s;
+                opt.textContent = s;
+                select.appendChild(opt);
+            });
+        }
+
+        // function populateLabelDropdown(data) {
+        //     const select = document.getElementById("labelFilter");
+        //     select.innerHTML = '<option value="ALL">All Labels</option>';
+        //     uniqueLabels.forEach(s => {
+        //         const opt = document.createElement("option");
+        //         opt.value = s;
+        //         opt.textContent = s;
+        //         select.appendChild(opt);
+        //     });
+        // }
+
+        function populateLabelDropdown(data) {
+            const container = document.getElementById("labelFilter");
+            container.innerHTML = "";
+            // Collect unique labels from data
+            const uniqueLabels = new Set();
+            data.forEach(item => {
+                (item.Labels || []).forEach(l => {
+                    if (l) uniqueLabels.add(l);
+                });
+            });
+            // ---- ALL checkbox ----
+            container.appendChild(createCheckbox("ALL", "All Labels", true));
+            // ---- individual labels ----
+            uniqueLabels.forEach(label => {
+                container.appendChild(createCheckbox(label, label));
+            });
+        }
+
+        function populateStatusDropdown(data) {
+            const container = document.getElementById("statusFilter");
+            container.innerHTML = "";
+            // Collect unique labels from data
+            const uniqueLabels = Object.keys(data);
+            // ---- ALL checkbox ----
+            container.appendChild(createCheckbox("ALL", "All Status", true));
+            // ---- individual labels ----
+            uniqueLabels.forEach(label => {
+                container.appendChild(createCheckbox(label, label));
+            });
+        }
+
+        function createCheckbox(value, text, checked = false) {
+            const label = document.createElement("label");
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.value = value;
+            input.checked = checked;
+            input.addEventListener("change", (event) => {
+                const container = document.getElementById(event.target.parentElement.parentElement.id);
+                const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+                if (event.target.value === "ALL" && event.target.checked) {
+                    // ✅ uncheck all others
+                    checkboxes.forEach(cb => {
+                        if (cb.value !== "ALL") cb.checked = false;
+                    });
+                } else {
+                    // ✅ if any individual selected → uncheck ALL
+                    const allBox = container.querySelector('input[value="ALL"]');
+                    if (allBox) allBox.checked = false;
+                }
+                clearTimeout(chartTimer);
+                chartTimer = 0;
+                chartTimer = setTimeout(updateChart, 500);
+            });
+            label.appendChild(input);
+            label.append(" " + text);
+            return label;
+        }
+
+        function getSelectedLabels() {
+            const checkboxes = document.querySelectorAll("#labelFilter input:checked");
+            const values = Array.from(checkboxes).map(c => c.value);
+            if (values.includes("ALL")) return "ALL";
+            return values;
+        }
+
+        function getSelectedStatus() {
+            const checkboxes = document.querySelectorAll("#statusFilter input:checked");
+            const values = Array.from(checkboxes).map(c => c.value);
+            if (values.includes("ALL")) return "ALL";
+            return values;
+        }
+
+        document.getElementById("severityFilter")
+            .addEventListener("change", () => {
+                clearTimeout(chartTimer);
+                chartTimer = 0;
+                chartTimer = setTimeout(updateChart, 500);
+            });
+
+        document.getElementById("labelFilter")
+            .addEventListener("change", () => {
+                clearTimeout(chartTimer);
+                chartTimer = 0;
+                chartTimer = setTimeout(updateChart, 500);
+            });
+
+        document.getElementById("statusFilter")
+            .addEventListener("change", () => {
+                clearTimeout(chartTimer);
+                chartTimer = 0;
+                chartTimer = setTimeout(updateChart, 500);
+            });
+
+        // ---------- Count By Status ----------
+        function getCounts(data, obj) {
+            const counts = {};
+            const category = {};
+            const severity = obj.severity;
+            const label = obj.label || "ALL";
+            const issueStatus = obj.status || "ALL";
+            filteredData = [];
+            data.forEach(item => {
+                if (severity !== "ALL" && item["Custom field (Severity)"] !== severity) return;
+
+                let statusMatch = false;
+                if (!Array.isArray(issueStatus) && issueStatus == "ALL")
+                    statusMatch = true;
+                else if (issueStatus.length == 0)
+                    return;
+                else {
+                    for (let i = 0; i < issueStatus.length; i++) {
+                        if (item["Status"].indexOf(issueStatus[i]) < 0) statusMatch = true;
+                    }
+                }
+                if (!statusMatch)
+                    return;
+
+                let matched = false;
+                if (!Array.isArray(label) && label == "ALL")
+                    matched = true;
+                else if (label.length == 0)
+                    return;
+                else {
+                    for (let i = 0; i < label.length; i++) {
+                        if (item["Labels"].indexOf(label[i]) >= 0) matched = true;
+                    }
+                }
+                const cat = item["Custom field (Bug Category)"] || "Unassigned";
+                if (!matched) return;
+                else
+                    category[cat] = (category[cat] || 0) + 1;
+                const status = item.Status || "Unknown";
+                counts[status] = (counts[status] || 0) + 1;
+                filteredData.push(item);
+            });
+            if (isLaunch) {
+                populateLabelDropdown(filteredData);
+                populateStatusDropdown(counts);
+            }
+            isLaunch = false;
+            showCategoryChart(category);
+            showFEPlayerChart(category);
+            currentList = counts;
+            return counts;
+        }
+
+        // ---------- Render Chart ----------
+        // function updateChart() {
+        //     const severity = document.getElementById("severityFilter").value;
+        //     // const label = document.getElementById("labelFilter").value;
+        //     const label = getSelectedLabels();
+        //     const counts = getCounts(rawData, { 'severity': severity || 'ALL', 'label': label || 'ALL' });
+        //     const labels = Object.keys(counts);
+        //     const values = Object.values(counts);
+        //     document.getElementById("totalCount").textContent = values.reduce((a, b) => a + b, 0);
+        //     if (chart) chart.destroy();
+        //     chart = new Chart(document.getElementById("chart"), {
+        //         type: "pie",
+        //         data: {
+        //             labels,
+        //             datasets: [{
+        //                 data: values
+        //             }]
+        //         },
+        //         options: {
+        //             responsive: true,
+        //             plugins: {
+        //                 legend: {
+        //                     position: "right",
+        //                     onClick: (event, legendItem, legend) => {
+        //                         const chart = legend.chart;
+        //                         const index = legendItem.index;
+        //                         chart.toggleDataVisibility(index);
+        //                         chart.update();
+        //                         let tempList = Object.assign({}, currentList);
+        //                         delete tempList[legendItem.text];
+        //                         let value = Object.values(tempList);
+        //                         document.getElementById("totalCount").textContent = value.reduce((a, b) => a + b, 0);
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     });
+        // }
+
+
+
+
+        function updateVisibleTotal(chartCtx) {
+            const series = chartCtx.w.config.series;
+            const hidden = chartCtx.w.globals.collapsedSeriesIndices;
+            let total = 0;
+            series.forEach((v, i) => {
+                if (!hidden.includes(i)) total += v;
+            });
+            document.getElementById("totalCount").textContent = total;
+        }
+
+
+        function updateChart() {
+            const severity = document.getElementById("severityFilter").value;
+            const label = getSelectedLabels();
+            const status = getSelectedStatus();
+            const counts = getCounts(rawData, {
+                severity: severity || "ALL",
+                label: label || "ALL",
+                status: status || "ALL"
+            });
+            const labels = Object.keys(counts);
+            const values = Object.values(counts);
+
+            const total = values.reduce((a, b) => a + b, 0);
+            document.getElementById("totalCount").textContent = total;
+
+            // destroy old chart
+            if (chart) chart.destroy();
+            chart = new ApexCharts(document.querySelector("#chart"), {
+                chart: {
+                    type: "pie",
+                    // ⭐ legend click event
+                    events: {
+                        legendClick: function (chartCtx, seriesIndex, config) {
+                            // const label = config.globals.labels[seriesIndex];
+                            // chart.toggleSeries(label)
+                            setTimeout(() => {
+                                updateVisibleTotal(chartCtx);
+                            }, 0);
+                            return true;
+                        }
+                    }
+                },
+                series: values,
+                labels: labels,
+                legend: {
+                    position: "right"
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: (val, opts) => {
+                        const value = opts.w.config.series[opts.seriesIndex];
+                        return `${value}`;
+                    }
+                }
+            });
+
+            chart.render();
+        }
+
+        function generateColors(n) {
+            const colors = [];
+            for (let i = 0; i < n; i++) {
+                const hue = (i * 360) / n;
+                // dark palette
+                const saturation = 65;  // rich but not neon
+                const lightness = 30;   // ⭐ dark
+                colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+            }
+            return colors;
+        }
+
+
+        // function showCategoryChart(category) {
+        //     return;
+        //     const labels = Object.keys(category);
+        //     const values = Object.values(category);
+        //     if (catChart) catChart.destroy();
+        //     catChart = new Chart(document.getElementById("catChart"), {
+        //         type: "bar",
+        //         data: {
+        //             labels,
+        //             datasets: [{
+        //                 data: values,
+        //                 backgroundColor: generateColors(values.length)
+        //             }]
+        //         },
+        //         options: {
+        //             responsive: true
+        //         }
+        //     });
+        // }
+
+        function showCategoryChart(category) {
+            const labels = Object.keys(category);
+            const values = Object.values(category);
+            if (catChart) catChart.destroy();
+            catChart = new ApexCharts(document.querySelector("#catChart"), {
+                chart: {
+                    type: "bar",
+                    height: 400
+                },
+                series: [{
+                    name: "Count",
+                    data: values
+                }],
+                xaxis: {
+                    categories: labels
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 6,
+                        columnWidth: "55%",
+                        distributed: true   // ⭐ different color per bar
+                    }
+                },
+                dataLabels: {
+                    enabled: true
+                },
+                legend: {
+                    show: false
+                }
+            });
+            catChart.render();
+        }
+
+        function showFEPlayerChart(category) {
+            let newCategory = {};
+            newCategory["FE Issue"] = category["FE Issue"]
+            newCategory["Player Issue"] = category["Player Issue"];
+            const labels = Object.keys(newCategory);
+            const values = Object.values(newCategory);
+            if (FEPlayerChart) FEPlayerChart.destroy();
+            FEPlayerChart = new ApexCharts(document.querySelector("#fe-player"), {
+                chart: {
+                    type: "bar",
+                    height: 400
+                },
+                series: [{
+                    name: "Count",
+                    data: values
+                }],
+                xaxis: {
+                    categories: labels
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 6,
+                        columnWidth: "55%",
+                        distributed: true   // ⭐ different color per bar
+                    }
+                },
+                dataLabels: {
+                    enabled: true
+                },
+                legend: {
+                    show: false
+                }
+            });
+            FEPlayerChart.render();
+        }
+
+
+
+        // fetch json
+        async function fetchJson(url) {
+            const res = await fetch(url);
+            return await res.json();
+        }
+
+        function showProgressChart(category) {
+            const labels = Object.keys(category);
+            const values = Object.values(category);
+            let ProgressChart = new ApexCharts(document.querySelector("#progressChart"), {
+                chart: {
+                    type: "bar",
+                    height: 400
+                },
+                series: [{
+                    name: "Count",
+                    data: values
+                }],
+                xaxis: {
+                    categories: labels
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 6,
+                        columnWidth: "55%",
+                        distributed: true   // ⭐ different color per bar
+                    }
+                },
+                dataLabels: {
+                    enabled: true
+                },
+                legend: {
+                    show: false
+                }
+            });
+            ProgressChart.render();
+        }
+
+        function sortByMonth(obj) {
+            const monthOrder = [
+                "Jul","Aug","Sep","Oct","Nov","Dec",
+                "Jan","Feb","Mar","Apr","May","Jun"
+            ];
+            return Object.fromEntries(
+                Object.entries(obj)
+                .sort((a, b) =>
+                    monthOrder.indexOf(a[0]) - monthOrder.indexOf(b[0])
+                )
+            );
+        }
+
+        async function initiateProcess() {
+            rawData = await fetchJson(`./Acsvjson.json?${new Date().getTime()}`);
+            processData(rawData);
+            const closedData = await fetchJson(`./Aclosed.json?${new Date().getTime()}`);
+            let closed = {};
+            closedData.forEach(item => {
+                let month = item.Updated.split('/')[1];
+                closed[month] = (closed[month] || 0) + 1;
+            })
+            showProgressChart(sortByMonth(closed));
+        }
+        initiateProcess();
+    </script>
+
+</body>
+
+</html>
