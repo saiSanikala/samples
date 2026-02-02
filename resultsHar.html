@@ -503,6 +503,8 @@
       try {
         validationJson = JSON.parse(validationJson);
         filteredEntries.forEach((input, ind) => {
+          if(Object.hasOwn(input, 'result'))
+            delete input.result;
           results.push(validateJson(input, validationJson, ind));
         })
         console.log(results);
