@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>XHR / HAR Viewer (Modal Fixed Size)</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    header {
+      background: #222;
+      color: #fff;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+      white-space: nowrap;
+    }
+
+    header input[type="file"] {
+      color: #fff;
+    }
+
+    .controls {
+      padding: 8px 16px;
+      background: #eee;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .controls input[type="text"] {
+      padding: 4px 6px;
+      min-width: 260px;
+    }
+
+    .content {
+      padding: 8px 16px 16px;
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+    }
+
+    .error {
+      color: #b00020;
+      font-size: 13px;
+      margin: 4px 0 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      background: #ddd;
+      z-index: 1;
+    }
+
+    th,
+    td {
+      padding: 4px 6px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .url-cell {
+      font-family: monospace;
+      white-space: normal;
+      word-break: break-all;
+    }
+
+    .url-link {
+      color: #0366d6;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .method {
+      font-weight: 600;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: #eee;
+      display: inline-block;
+    }
+
+    .status {
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: #eee;
+      display: inline-block;
+    }
+
+    /* Modal overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-hidden {
+      display: none;
+    }
+
+    .report-button {
+      position: absolute;
+      right: 3%;
+    }
+
+    /* Fixed-size modal card */
+    .modal-card {
+      background: #fff;
+      width: 900px;
+      /* fixed width */
+      height: 600px;
+      /* fixed height */
+      border-radius: 8px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      /* ensure only body scrolls */
+    }
+
+    /* Header (always visible) */
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      background: #fafafa;
+      flex: 0 0 auto;
+      /* do not shrink or grow */
+    }
+
+    .modal-header .title {
+      font-size: 14px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .modal-header .meta {
+      font-size: 12px;
+      color: #666;
+      margin-left: 12px;
+      white-space: nowrap;
+    }
+
+    .modal-close {
+      border: none;
+      background: transparent;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    /* Tabs (always visible) */
+    .modal-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      background: #fff;
+      flex: 0 0 auto;
+      /* fixed area, not scrollable */
+    }
+
+    .tab {
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+      background: transparent;
+      border: 1px solid transparent;
+    }
+
+    .tab.active {
+      background: #0366d6;
+      color: #fff;
+      border-color: rgba(0, 0, 0, 0.06);
+    }
+
+    /* Body area (this is the only scrollable region) */
+    .modal-body {
+      padding: 12px;
+      overflow: auto;
+      flex: 1 1 auto;
+      /* take remaining space, scroll when content overflows */
+      background: #fff;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    pre {
+      font-size: 12px;
+      background: #f7f7f7;
+      padding: 12px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      margin: 6px 0;
+      color: #444;
+      font-weight: 600;
+    }
+
+    .empty {
+      color: #666;
+      font-size: 13px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .chip {
+      background: #e1ecf4;
+      color: #0366d6;
+      padding: 4px 8px;
+      border-radius: 14px;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chip button {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      color: #555;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>XHR / HAR Viewer</h1>
+    <input type="file" id="fileInput" accept=".json,.har" multiple />
+    <input type="text" id="startTime" placeholder="hh:mm:ss" />
+    <input type="text" id="endTime" placeholder="hh:mm:ss" />
+    <button id="report" class="report-button">show report</button>
+  </header>
+
+  <div class="controls">
+    <label>
+      Include(press Enter):
+      <input type="text" id="filterTextInclude" placeholder="png, analytics, fonts..." />
+    </label>
+
+    <label style="margin-left:16px;">
+      Exclude(press Enter):
+      <input type="text" id="filterTextExclude" placeholder="google-analytics, beacon..." />
+    </label>
+
+    <label style="margin-left:16px;">
+      JSON:
+      <input type="text" id="validationInput"
+        placeholder="{'match': {'cpid': 1234}, 'ignore':[], 'mandate':['id','timestamp']}" />
+    </label>
+    <button id="validate" value="validate">validate</button>
+
+    <div style="margin-left:auto;">
+      <span id="summary">No file loaded</span>
+    </div>
+  </div>
+
+  <!-- Chips -->
+  <div class="controls">
+    <div>
+      <strong>Include:</strong>
+      <div id="includeChips" class="chips"></div>
+    </div>
+    <div style="margin-left:16px;">
+      <strong>Exclude:</strong>
+      <div id="excludeChips" class="chips"></div>
+    </div>
+  </div>
+
+
+  <div class="content">
+    <div id="error" class="error"></div>
+    <div id="tableContainer"></div>
+  </div>
+
+  <!-- Modal with fixed size; header + tabs fixed, body scrolls -->
+  <div id="modalOverlay" class="modal-overlay modal-hidden" role="dialog" aria-modal="true">
+    <div class="modal-card" role="document">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="title" id="modalTitle">Request Details</div>
+          <div class="meta" id="modalMeta"></div>
+        </div>
+        <button id="modalClose" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-tabs" role="tablist" aria-label="Request detail tabs">
+        <button class="tab active" data-tab="req" role="tab" aria-selected="true">Request Body</button>
+        <button class="tab" data-tab="res" role="tab" aria-selected="false">Response Body</button>
+        <button class="tab" data-tab="hdr" role="tab" aria-selected="false">Headers</button>
+        <button class="tab" data-tab="ck" role="tab" aria-selected="false">Cookies</button>
+        <button class="tab" data-tab="rs" role="tab" aria-selected="false">Result</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="panel-req" class="panel active" role="tabpanel">
+          <div class="section-title">Request Body</div>
+          <pre id="panelReqPre" class="panel-pre"></pre>
+        </div>
+
+        <div id="panel-res" class="panel" role="tabpanel">
+          <div class="section-title">Response Body</div>
+          <pre id="panelResPre" class="panel-pre"></pre>
+        </div>
+
+        <div id="panel-hdr" class="panel" role="tabpanel">
+          <div class="two-column">
+            <div>
+              <div class="section-title">Request Headers</div>
+              <pre id="panelReqHdr" class="panel-pre"></pre>
+            </div>
+            <div>
+              <div class="section-title">Response Headers</div>
+              <pre id="panelResHdr" class="panel-pre"></pre>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-ck" class="panel" role="tabpanel">
+          <div class="two-column">
+            <div>
+              <div class="section-title">Request Cookies</div>
+              <pre id="panelReqCk" class="panel-pre"></pre>
+            </div>
+            <div>
+              <div class="section-title">Response Cookies</div>
+              <pre id="panelResCk" class="panel-pre"></pre>
+            </div>
+          </div>
+        </div>
+        <div id="panel-rs" class="panel" role="tabpanel">
+          <div class="section-title">Result</div>
+          <pre id="panelReqRs" class="panel-pre"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var filters = [];
+    var includeFilters = [];
+    var excludeFilters = [];
+    var ALL_LOGS = [];
+    var GA_EVENTS = [];
+    var GV_EVENTS = [];
+    var results = [];
+    const includeInput = document.getElementById("filterTextInclude");
+    const excludeInput = document.getElementById("filterTextExclude");
+    const validationInput = document.getElementById("validationInput");
+    const validate = document.getElementById("validate");
+    const includeChipsEl = document.getElementById("includeChips");
+    const excludeChipsEl = document.getElementById("excludeChips");
+    // -- same JS logic as before, adapted to this markup --
+    const fileInput = document.getElementById("fileInput");
+    // const filterTextInput = document.getElementById("filterText");
+    const tableContainer = document.getElementById("tableContainer");
+    const errorEl = document.getElementById("error");
+    const summaryEl = document.getElementById("summary");
+
+    const modalOverlay = document.getElementById("modalOverlay");
+    const modalClose = document.getElementById("modalClose");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalMeta = document.getElementById("modalMeta");
+
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+    const panels = {
+      req: document.getElementById("panel-req"),
+      res: document.getElementById("panel-res"),
+      hdr: document.getElementById("panel-hdr"),
+      ck: document.getElementById("panel-ck"),
+      rs: document.getElementById("panel-rs")
+    };
+
+    const panelReqPre = document.getElementById("panelReqPre");
+    const panelResPre = document.getElementById("panelResPre");
+    const panelReqHdr = document.getElementById("panelReqHdr");
+    const panelResHdr = document.getElementById("panelResHdr");
+    const panelReqCk = document.getElementById("panelReqCk");
+    const panelResCk = document.getElementById("panelResCk");
+    const panelRs = document.getElementById("panelReqRs");
+
+    let allEntries = [];
+    let filteredEntries = [];
+    // let filters = [];
+
+    function addChip(value, list, container) {
+      if (list.includes(value)) return;
+      list.push(value);
+
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = value;
+
+      const close = document.createElement("button");
+      close.textContent = "×";
+      close.onclick = () => {
+        const idx = list.indexOf(value);
+        if (idx !== -1) list.splice(idx, 1);
+        chip.remove();
+        renderFiltered();
+      };
+
+      chip.appendChild(close);
+      container.appendChild(chip);
+    }
+
+
+    document.getElementById('report').addEventListener('click', getGAGVReport);
+    fileInput.addEventListener("change", handleFileSelect);
+
+
+    includeInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const v = includeInput.value.trim().toLowerCase();
+        if (v) {
+          addChip(v, includeFilters, includeChipsEl);
+          renderFiltered();
+        }
+        includeInput.value = "";
+      }
+    });
+
+    excludeInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const v = excludeInput.value.trim().toLowerCase();
+        if (v) {
+          addChip(v, excludeFilters, excludeChipsEl);
+          renderFiltered();
+        }
+        excludeInput.value = "";
+      }
+    });
+
+    validate.addEventListener("click", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const v = excludeInput.value.trim().toLowerCase();
+        if (v) {
+          addChip(v, excludeFilters, excludeChipsEl);
+          renderFiltered();
+        }
+        excludeInput.value = "";
+      }
+      let validationJson = validationInput.value || '{}';
+      results = [];
+      try {
+        validationJson = JSON.parse(validationJson);
+        filteredEntries.forEach((input, ind) => {
+          results.push(validateJson(input, validationJson, ind));
+        })
+        console.log(results);
+        // re-render results
+        tableContainer.innerHTML = "";
+        tableContainer.appendChild(renderTable(filteredEntries));
+      } catch (e) {
+        alert('Enter valid JSON');
+      }
+    });
+
+    function unwrapValue(v) {
+      while (
+        v &&
+        typeof v === "object" &&
+        !Array.isArray(v) &&
+        "value" in v &&
+        Object.keys(v).length === 1
+      ) {
+        v = v.value;
+      }
+      return v;
+    }
+
+
+    function collectKeyValues(input) {
+      const map = Object.create(null);
+
+      function walk(node) {
+        if (node === null || typeof node !== "object") return;
+
+        // Handle arrays
+        if (Array.isArray(node)) {
+          for (const item of node) {
+            // Special case: { name, value } pattern
+            if (
+              item &&
+              typeof item === "object" &&
+              "name" in item &&
+              "value" in item
+            ) {
+              if (map[item.name] === undefined) {
+                map[item.name] = unwrapValue(item.value);
+              }
+            } else {
+              walk(item);
+            }
+          }
+          return;
+        }
+
+        // Handle objects
+        for (let [key, raw] of Object.entries(node)) {
+          if(key == 'text') {
+            try {
+              raw = JSON.parse(raw)
+            } catch(e){
+              console.log(e);
+            }
+          }
+          const value = unwrapValue(raw);
+          // Store only meaningful leaf values
+          if (
+            map[key] === undefined &&
+            (value === null ||
+              typeof value !== "object" ||
+              Array.isArray(value))
+          ) {
+            if(Array.isArray(value)) {
+              value.forEach(subItem => {
+                if(typeof subItem == "object")
+                  walk(value);
+                else
+                  map[key].push(value)
+              })
+            } else
+              map[key] = value;
+          } else if(Array.isArray(value)) {
+            map[key] = value;
+          } else if(typeof value == "object"){
+            walk(raw);
+          }
+        }
+      }
+
+      walk(input);
+      return map;
+    }
+
+
+    function isEmpty(value) {
+      return (
+        value === null ||
+        value === undefined ||
+        value === "" ||
+        (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
+      );
+    }
+
+    function validateJson(input, rules, ind) {
+      const result = {
+        valid: true,
+        errors: []
+      };
+
+      const { match = {}, mandate = [], ignore = [] } = rules;
+
+      const keyMap = collectKeyValues(input);
+
+      // ---- MATCH ----
+      for (const key in match) {
+        if (!Object.hasOwn(keyMap, key)) {
+          result.valid = false;
+          result.index = ind;
+          result.errors.push(`MATCH: Missing key: ${key}`);
+          continue;
+        } else  if (keyMap[key] === match[key]) {
+          // matched
+        } else {
+          result.valid = false;
+          result.index = ind;
+          result.errors.push(`MATCH: Miss-Matched value: ${key}`);
+        }
+      }
+
+      // ---- MANDATE ----
+      for (const key of mandate) {
+        if (!Object.hasOwn(keyMap, key)) {
+          result.valid = false;
+          result.index = ind;
+          result.errors.push(`MANDATE: Missing key: ${key}`);
+          continue;
+        } else {
+          if(!keyMap[key]) {
+            result.valid = false;
+            result.index = ind;
+            result.errors.push(`MANDATE: Missing value: ${key}`)
+          }
+        }
+      }
+      filteredEntries[ind].result = result;
+      return result;
+    }
+
+
+    function renderFiltered() {
+      try {
+        if (!allEntries.length) {
+          tableContainer.innerHTML = "";
+          summaryEl.textContent = "No file loaded";
+          return;
+        }
+
+        const filtered = allEntries.filter(entry => {
+          const url = (entry.url || "").toLowerCase();
+
+          // ❌ Exclude filters take priority
+          if (excludeFilters.some(f => url.includes(f))) {
+            return false;
+          }
+
+          // ✅ Include filters (if any exist)
+          if (includeFilters.length) {
+            return includeFilters.some(f => url.includes(f));
+          }
+
+          return true;
+        });
+
+        summaryEl.textContent =
+          `Total: ${allEntries.length} | Showing: ${filtered.length}`;
+        //  +
+        // (includeFilters.length ? ` | include: ${includeFilters.join(", ")}` : "") +
+        // (excludeFilters.length ? ` | exclude: ${excludeFilters.join(", ")}` : "");
+
+        tableContainer.innerHTML = "";
+        tableContainer.appendChild(renderTable(filtered));
+        filteredEntries = filtered;
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+
+
+    // filterTextInput.addEventListener("keydown", (e) => {
+    //   if (e.key === "Enter") {
+    //     e.preventDefault();
+    //     const raw = filterTextInput.value.trim();
+    //     if (raw) {
+    //       const v = raw.toLowerCase();
+    //       if (!filters.includes(v)) {
+    //         filters.push(v);
+    //         renderFilters();
+    //         renderFiltered();
+    //       }
+    //       filterTextInput.value = "";
+    //     }
+    //   }
+    // });
+
+    modalClose.addEventListener("click", hideModal);
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) hideModal();
+    });
+
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        selectTab(tab.dataset.tab);
+      });
+    });
+
+    function selectTab(name) {
+      tabs.forEach(t => {
+        const active = t.dataset.tab === name;
+        t.classList.toggle("active", active);
+        t.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      Object.keys(panels).forEach(k => {
+        panels[k].classList.toggle("active", k === name);
+      });
+    }
+
+    function toSeconds(t) {
+      let isEvening = false;
+      if (t.toLowerCase().includes('am') || t.toLowerCase().includes('pm')) {
+        isEvening = t.toLowerCase().includes('pm');
+        t = t.toLowerCase().replace('am', '').trim();
+        t = t.toLowerCase().replace('pm', '').trim();
+      }
+      var [h, m, s] = t.split(':').map(Number);
+      h = isEvening ? h + 12 : h;
+      return h * 3600 + m * 60 + s;
+    }
+    function isGreater(a, b) {
+      return toSeconds(a) > toSeconds(b);
+    }
+    function isLesser(a, b) {
+      return toSeconds(a) < toSeconds(b);
+    }
+    function isBetween(a, b, c) {
+      return ((toSeconds(b) > toSeconds(a)) && (toSeconds(b) < toSeconds(c)));
+    }
+
+    function getGAGVReport() {
+      if (ALL_LOGS.length <= 0)
+        return;
+      let gaEndPoint = "www.google-analytics.com/";
+      let gvPriorityEndPoint = "priority/records";
+      let gvBatchEndPoint = "batched/records";
+      // let EVENT_BUCKET = [];
+      GA_EVENTS = [];
+      GV_EVENTS = [];
+      ALL_LOGS.forEach(request => {
+        if (request.url.includes(gaEndPoint)) {
+          let data = request.raw?.request?.postData?.text || "{}";
+          data = JSON.parse(data);
+          let evtPayload = formatGAData(data);
+          evtPayload.ts = new Date(request.started).toLocaleTimeString();
+          GA_EVENTS.push(evtPayload);
+        } else if (request.url.includes(gvPriorityEndPoint)) {
+          let data = request.raw?.request?.postData?.text || "{}";
+          data = JSON.parse(data);
+          let evtPayload = formatGVData(data);
+          evtPayload.ts = new Date(request.started).toLocaleTimeString();
+          evtPayload.type = 'P';
+          GV_EVENTS.push(evtPayload);
+        } else if (request.url.includes(gvBatchEndPoint)) {
+          let data = request.raw?.request?.postData?.text || "{}";
+          data = JSON.parse(data);
+          data.forEach(record => {
+            let evtPayload = formatGVData(record);
+            evtPayload.ts = new Date(request.started).toLocaleTimeString();
+            evtPayload.type = 'B';
+            GV_EVENTS.push(evtPayload);
+          })
+        }
+      })
+
+      // start time
+      // end time
+      let startTime = document.getElementById('startTime').value || '0:0:0';
+      let endTime = document.getElementById('endTime').value || '23:59:59';
+
+      const occurances = {};
+      let total = {
+        ga: 0,
+        priority: 0,
+        batch: 0
+      }
+      GA_EVENTS.forEach(item => {
+        if (isBetween(startTime, item.ts, endTime)) {
+          if (!occurances[item.evtName]) {
+            occurances[item.evtName] = { ga: 0, batch: 0, priority: 0 };
+          }
+          occurances[item.evtName].ga++;
+          total.ga++;
+        }
+      });
+      GV_EVENTS.forEach(item => {
+        if (isBetween(startTime, item.ts, endTime)) {
+          if (!occurances[item.evtName]) {
+            occurances[item.evtName] = { ga: 0, batch: 0, priority: 0 };
+          }
+          if (item.type === 'P') {
+            occurances[item.evtName].priority++;
+            total.priority++;
+          } else {
+            occurances[item.evtName].batch++;
+            total.batch++;
+          }
+        }
+      });
+      occurances.total = total;
+      showReport(occurances);
+    }
+
+    function showReport(data) {
+      try {
+        document.body.removeChild(document.getElementById('popupBox'));
+      } catch (e) { }
+      let html = `
+    <style>
+      #popupBox table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      #popupBox thead, 
+      #popupBox tbody {
+        display: block;
+      }
+      #popupBox tbody {
+        max-height: 300px;      /* Adjust scroll height */
+        overflow-y: auto;
+      }
+      #popupBox thead tr, 
+      #popupBox tbody tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+      }
+      #popupBox th, #popupBox td {
+        padding: 6px;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+      }
+    </style>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Event Name</th>
+          <th>GA</th>
+          <th>Batch</th>
+          <th>Priority</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+      Object.keys(data).forEach(key => {
+        const row = data[key];
+        html += `
+      <tr>
+        <td>${key}</td>
+        <td>${row.ga}</td>
+        <td>${row.batch}</td>
+        <td>${row.priority}</td>
+      </tr>`;
+      });
+
+      html += `
+      </tbody>
+    </table>
+  `;
+
+      const popup = document.createElement("div");
+      popup.id = "popupBox";
+      popup.style.position = "absolute";
+      popup.style.top = "25%";
+      popup.style.left = "25%";
+      popup.style.background = "white";
+      popup.style.padding = "20px";
+      popup.style.borderRadius = "8px";
+      popup.style.boxShadow = "0 0 20px rgba(0,0,0,0.3)";
+      popup.style.zIndex = "2147483647";
+      popup.style.width = "50%";
+      popup.style.display = "block";
+      popup.style.color = "black";
+
+      // Close button
+      const closeBtn = document.createElement("span");
+      closeBtn.innerHTML = "✖";
+      closeBtn.id = 'popup_close';
+      closeBtn.style.position = "absolute";
+      closeBtn.style.top = "8px";
+      closeBtn.style.right = "12px";
+      closeBtn.style.cursor = "pointer";
+      closeBtn.style.fontSize = "20px";
+      closeBtn.style.color = "#333";
+      closeBtn.style.zIndex = "123";
+
+      closeBtn.onclick = () => popup.remove();
+
+      // Add content
+      const content = document.createElement("div");
+      content.innerHTML = html;
+
+      popup.appendChild(closeBtn);
+      popup.appendChild(content);
+      document.body.appendChild(popup);
+    }
+
+
+    function formatGAData(data) {
+      let payload = {
+        evtName: data.events[0].name,
+        screenName: data.events[0].params.ScreenName || '',
+        evenntCategory: data.events[0].params.eventCategory || '',
+        evenntAction: data.events[0].params.evenntAction || ''
+      }
+      return payload;
+    }
+
+    function formatGVData(data) {
+      let payload = {
+        evtName: data.event_name,
+        screenName: data.event_data.ScreenName || '',
+        evenntCategory: data.event_data.event_category || '',
+        evenntAction: data.event_data.evenntAction || ''
+      }
+      return payload;
+    }
+
+    function renderFilters() {
+      // small floating filter display on left of controls (simple)
+      // re-render summary only here for brevity
+      const fl = filters.length ? ` | filters: ${filters.join(", ")}` : "";
+      summaryEl.textContent = (allEntries.length ? `Total: ${allEntries.length}` : "No file loaded") + fl;
+    }
+
+    function handleFileSelect(evt) {
+      const files = Array.from(evt.target.files || []);
+      if (!files.length) return;
+      // Clear previous error + table while we load
+      errorEl.textContent = "";
+      tableContainer.innerHTML = "";
+      summaryEl.textContent = "Loading files...";
+
+      // Helper: read + parse one file
+      function readFileAsJson(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const text = e.target.result;
+              const data = JSON.parse(text);
+              resolve(data);
+            } catch (err) {
+              reject({ file, err });
+            }
+          };
+          reader.onerror = () => reject({ file, err: reader.error });
+          reader.readAsText(file);
+        });
+      }
+
+      // Read all files in parallel
+      Promise
+        .all(files.map(readFileAsJson))
+        .then((allData) => {
+          // allData is an array of parsed JSONs, one per file
+          let mergedEntries = [];
+          allData.forEach((data) => {
+            const entries = normalizeToEntries(data);
+            mergedEntries = mergedEntries.concat(entries);
+          });
+          allEntries = mergedEntries;
+          ALL_LOGS = mergedEntries;
+          errorEl.textContent = "";
+          summaryEl.textContent = `Loaded ${files.length} file(s), ${mergedEntries.length} entries`;
+          renderFiltered();
+        })
+        .catch(({ file, err }) => {
+          console.error("Parse error in file:", file && file.name, err);
+          errorEl.textContent = `Failed to parse file "${file && file.name}". Check the format.`;
+          tableContainer.innerHTML = "";
+          summaryEl.textContent = "Error parsing file(s)";
+        });
+    }
+
+
+    function normalizeToEntries(raw) {
+      let entries = [];
+      if (raw && raw.log && Array.isArray(raw.log.entries)) {
+        entries = raw.log.entries.map((e, idx) => {
+          const req = e.request || {};
+          const res = e.response || {};
+          const url = req.url || "";
+          const method = req.method || "GET";
+          const status = res.status || 0;
+          const started = e.startedDateTime ? new Date(e.startedDateTime).getTime() : idx;
+          const duration = (typeof e.time === "number") ? e.time : 0;
+          return { index: idx, started, duration, url, method, status, raw: e };
+        });
+      } else if (raw && Array.isArray(raw.entries)) {
+        entries = raw.entries.map((e, idx) => {
+          const url = e.url || (e.request && e.request.url) || "";
+          const method = e.method || (e.request && e.request.method) || "GET";
+          const status = e.status || (e.response && e.response.status) || 0;
+          const started = e.started || e.startTime || idx;
+          const duration = e.duration || e.time || 0;
+          return { index: idx, started, duration, url, method, status, raw: e };
+        });
+      } else if (Array.isArray(raw)) {
+        entries = raw.map((e, idx) => {
+          const url = e.url || (e.request && e.request.url) || "";
+          const method = e.method || (e.request && e.request.method) || "GET";
+          const status = e.status || (e.response && e.response.status) || 0;
+          const started = e.started || e.startTime || idx;
+          const duration = e.duration || e.time || 0;
+          return { index: idx, started, duration, url, method, status, raw: e };
+        });
+      } else {
+        console.error("Unknown JSON shape:", raw);
+        throw new Error("Unknown format. Expecting HAR, {entries: [...]}, or array of entries.");
+      }
+      entries.sort((a, b) => (a.started - b.started) || (a.index - b.index));
+      entries.forEach((e, i) => e.displayIndex = i + 1);
+      return entries;
+    }
+
+    // function renderFiltered() {
+    //   if (!allEntries.length) {
+    //     tableContainer.innerHTML = "";
+    //     summaryEl.textContent = "No file loaded";
+    //     return;
+    //   }
+    //   const filtered = allEntries.filter(entry => {
+    //     if (!filters.length) return true;
+    //     const urlLower = (entry.url || "").toLowerCase();
+    //     return filters.some(f => urlLower.includes(f));
+    //   });
+    //   summaryEl.textContent = `Total: ${allEntries.length} | Showing: ${filtered.length}` + (filters.length ? ` | filters: ${filters.join(", ")}` : "");
+    //   tableContainer.innerHTML = "";
+    //   tableContainer.appendChild(renderTable(filtered));
+    // }
+
+    function renderTable(entries) {
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      ["URL", "Method", "Status", "Duration"].forEach(text => {
+        const th = document.createElement("th"); th.textContent = text; headRow.appendChild(th);
+      });
+      thead.appendChild(headRow); table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      entries.forEach((entry, ind) => {
+        const tr = document.createElement("tr");
+        const tdUrl = document.createElement("td"); tdUrl.className = "url-cell";
+        const urlLink = document.createElement("span"); urlLink.className = "url-link"; urlLink.textContent = entry.url || "";
+        if(entry.result && !entry.result.valid) {
+          urlLink.style.color = 'red';
+        }
+        urlLink.title = "Click for request/response bodies, headers, cookies";
+        urlLink.addEventListener("click", (e) => { e.stopPropagation(); showModal(entry, ind); });
+        tdUrl.appendChild(urlLink); tr.appendChild(tdUrl);
+
+        const tdMethod = document.createElement("td"); const methodSpan = document.createElement("span"); methodSpan.className = "method"; methodSpan.textContent = entry.method || ""; tdMethod.appendChild(methodSpan); tr.appendChild(tdMethod);
+
+        const tdStatus = document.createElement("td"); const statusSpan = document.createElement("span"); statusSpan.className = "status"; statusSpan.textContent = entry.status || ""; tdStatus.appendChild(statusSpan); tr.appendChild(tdStatus);
+
+        const tdDuration = document.createElement("td"); tdDuration.className = "duration-cell"; tdDuration.textContent = entry.duration ? `${Math.round(entry.duration)} ms` : ""; tr.appendChild(tdDuration);
+
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      return table;
+    }
+
+    // Extraction helpers (same as before)
+    function getRequestBody(entry) {
+      const raw = entry.raw || {};
+      if (raw.request) {
+        const r = raw.request;
+        if (r.postData && (r.postData.text || r.postData.params)) {
+          if (r.postData.text) return tryParseText(r.postData.text);
+          if (Array.isArray(r.postData.params)) return JSON.stringify(r.postData.params, null, 2);
+        }
+        if (r.body) return tryParseText(r.body);
+        if (r.data) return tryParseText(r.data);
+      }
+      if (raw.request && raw.request.body) return tryParseText(raw.request.body);
+      if (raw.request && raw.request.data) return tryParseText(raw.request.data);
+      if (raw.postBody) return tryParseText(raw.postBody);
+      return null;
+    }
+
+    function getResponseBody(entry) {
+      const raw = entry.raw || {};
+      if (raw.response) {
+        const r = raw.response;
+        if (r.content && (r.content.text !== undefined)) {
+          if (r.content.encoding === "base64") return `[base64 content, length=${r.content.text.length}]`;
+          return tryParseText(r.content.text);
+        }
+        if (r.body) return tryParseText(r.body);
+        if (r.content && r.content.size && !r.content.text) return `[no inline content; size=${r.content.size}]`;
+      }
+      if (raw.response && raw.response.body) return tryParseText(raw.response.body);
+      if (raw.response && raw.response.data) return tryParseText(raw.response.data);
+      if (raw.body) return tryParseText(raw.body);
+      return null;
+    }
+
+    function getRequestHeaders(entry) {
+      const raw = entry.raw || {};
+      if (raw.request && Array.isArray(raw.request.headers)) return formatHeadersArray(raw.request.headers);
+      if (raw.request && raw.request.headers && typeof raw.request.headers === "object") return JSON.stringify(raw.request.headers, null, 2);
+      return null;
+    }
+
+    function getResponseHeaders(entry) {
+      const raw = entry.raw || {};
+      if (raw.response && Array.isArray(raw.response.headers)) return formatHeadersArray(raw.response.headers);
+      if (raw.response && raw.response.headers && typeof raw.response.headers === "object") return JSON.stringify(raw.response.headers, null, 2);
+      return null;
+    }
+
+    function getRequestCookies(entry) {
+      const raw = entry.raw || {};
+      if (raw.request && Array.isArray(raw.request.cookies)) return formatCookiesArray(raw.request.cookies);
+      if (raw.request && Array.isArray(raw.request.headers)) {
+        const cookieHdr = raw.request.headers.find(h => h.name && h.name.toLowerCase() === "cookie");
+        if (cookieHdr && cookieHdr.value) return cookieHdr.value;
+      }
+      return null;
+    }
+
+    function getResponseCookies(entry) {
+      const raw = entry.raw || {};
+      if (raw.response && Array.isArray(raw.response.cookies)) return formatCookiesArray(raw.response.cookies);
+      if (raw.response && Array.isArray(raw.response.headers)) {
+        const setCookies = raw.response.headers.filter(h => h.name && h.name.toLowerCase() === "set-cookie");
+        if (setCookies.length) return setCookies.map(h => h.value).join("\n");
+      }
+      return null;
+    }
+
+    function getResults(entry, ind) {
+      
+      const raw = filteredEntries[ind].result || {};
+      return tryParseText(raw);
+    }
+
+    function formatHeadersArray(arr) {
+      return arr.map(h => `${h.name}: ${h.value}`).join("\n");
+    }
+    function formatCookiesArray(arr) {
+      return arr.map(c => {
+        const pieces = [`${c.name}=${c.value}`];
+        if (c.path) pieces.push(`Path=${c.path}`);
+        if (c.domain) pieces.push(`Domain=${c.domain}`);
+        if (c.expires) pieces.push(`Expires=${c.expires}`);
+        if (c.httpOnly) pieces.push(`HttpOnly`);
+        if (c.secure) pieces.push(`Secure`);
+        return pieces.join("; ");
+      }).join("\n");
+    }
+
+    function tryParseText(txt) {
+      if (typeof txt !== "string") {
+        try { return JSON.stringify(txt, null, 2); } catch { return String(txt); }
+      }
+      try {
+        const parsed = JSON.parse(txt);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return txt;
+      }
+    }
+
+    function showModal(entry, ind) {
+      modalTitle.textContent = `${entry.method || ""} ${shortenForTitle(entry.url || "")}`;
+      modalMeta.textContent = (entry.status ? `status: ${entry.status}` : "") + (entry.duration ? ` | ${Math.round(entry.duration)} ms` : "");
+
+      panelReqPre.textContent = getRequestBody(entry) ?? "— (no request body)";
+      panelResPre.textContent = getResponseBody(entry) ?? "— (no response body)";
+      panelReqHdr.textContent = getRequestHeaders(entry) ?? "— (no request headers)";
+      panelResHdr.textContent = getResponseHeaders(entry) ?? "— (no response headers)";
+      panelReqCk.textContent = getRequestCookies(entry) ?? "— (no request cookies)";
+      panelResCk.textContent = getResponseCookies(entry) ?? "— (no response cookies)";
+      panelRs.textContent = getResults(entry, ind) ?? "— (no results yet!)";
+
+      selectTab("req");
+      modalOverlay.classList.remove("modal-hidden");
+      modalClose.focus();
+    }
+
+    function shortenForTitle(url) {
+      if (!url) return "";
+      try {
+        const u = new URL(url);
+        return `${u.origin}${u.pathname}`.slice(0, 120) + (url.length > 120 ? "…" : "");
+      } catch {
+        return url.slice(0, 120) + (url.length > 120 ? "…" : "");
+      }
+    }
+
+    function hideModal() { modalOverlay.classList.add("modal-hidden"); }
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modalOverlay.classList.contains("modal-hidden")) hideModal();
+    });
+  </script>
+</body>
+
+</html>
