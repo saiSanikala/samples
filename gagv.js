@@ -860,6 +860,13 @@ var GAGV = (function () {
             const sourceType = (typeof rawUrl === 'string' && rawUrl.toLowerCase().includes(ENDPOINT_C_FRAGMENT)) ? 'C' : 'B';
             const eventId = getEventIdFromPayload(newPayload) || '';
             const item = { evtName: singleName, payload: newPayload, ts: Date.now(), parsedOk: true, sourceUrl: rawUrl, sourceType, event_id: eventId };
+            // Run event validator if rules are set
+            if (window.validateEvent) {
+                var vErrors = window.validateEvent(singleName, newPayload);
+                if (vErrors && vErrors.length > 0) {
+                    item.validationErrors = vErrors;
+                }
+            }
             state.listB.push(item);
             // If there are rows with same evtName and no eventId yet, prefer to attach discovered event_id (helps linking)
             if (eventId && (sourceType == 'C')) {
@@ -1042,6 +1049,12 @@ var GAGV = (function () {
         tbody.appendChild(tr);
 
         const rowObj = { sn, aItem, bItem: bItem || null, eventId: initialEventId || (bItem && bItem.event_id ? bItem.event_id : ''), tr, snCell, leftCell, rightCell, eventIdCell, pCell, cCell, GATS, GVTS };
+        // Show validation error indicator on the row
+        if (aItem.validationErrors && aItem.validationErrors.length > 0) {
+            snCell.title = aItem.validationErrors.map(function(e) { return e.field + ': ' + e.message; }).join('\n');
+            snCell.style.background = '#fff3cd';
+            snCell.textContent = String(sn) + ' ⚠️';
+        }
         state.rows.push(rowObj);
         // We apply legend effects only to compare popup (not table rows), so do not alter row visibility here.
         // initialize P/C counts for this row
@@ -1092,6 +1105,13 @@ var GAGV = (function () {
                 }
                 const newPayload = transformGAtoGV(payload);
                 const aItem = { evtName, payload: newPayload, ts: Date.now(), parsedOk: parsed.ok, sourceUrl: evt.url };
+                // Run event validator if rules are set
+                if (window.validateEvent) {
+                    var vErrors = window.validateEvent(evtName, newPayload);
+                    if (vErrors && vErrors.length > 0) {
+                        aItem.validationErrors = vErrors;
+                    }
+                }
                 state.listA.push(aItem);
                 appendRowForA(aItem);
                 refreshCounts();
@@ -1888,6 +1908,11 @@ function connectToSocket(id) {
     WS.addEventListener('open', () => {
         WS_LIVE = true;
         console.log('connected as: ' + id);
+        // Swap input/message areas before showing overlay
+        var inputArea = document.getElementById('inputArea');
+        var messageArea = document.getElementById('messageArea');
+        if (inputArea) inputArea.classList.add('hidden');
+        if (messageArea) messageArea.classList.remove('hidden');
         compareControl('show');
         if (!window.isClient)
             pushMessagesFromQue();
