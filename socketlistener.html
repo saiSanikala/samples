@@ -311,6 +311,7 @@
       <!-- Event Validator block -->
       <div class="label-controls" style="margin-top: 12px;">
         <span style="font-weight: 600; font-size: 14px;">Event Validator</span>
+        <button onclick="toggleMasterJson()" style="margin-left: 8px; padding: 4px 10px; font-size: 12px; background: #f5f5f5; border: 1px solid #444; color: black; border-radius: 4px;">Master JSON</button>
         <span class="info-icon" style="position: relative; top: 0; right: 0; display: inline;">
           ℹ️
           <span class="tooltip" style="left: 25px; top: -5px; width: 380px;">
@@ -326,6 +327,22 @@
             <code style="white-space: pre-wrap;">{ "list_id": { "required": true, "notNull": true }, "item_name": { "type": "string" } }</code>
           </span>
         </span>
+        <!-- Master JSON panel -->
+        <div id="masterJsonPanel" style="display: none; margin-top: 8px;">
+          <textarea id="masterJsonInput" rows="8" style="width: 95%; font-family: monospace; font-size: 12px; border-radius: 6px; border: 1px solid #666; padding: 8px;" placeholder='{
+  "view_item_list": {
+    "list_id": { "required": true, "notNull": true },
+    "item_name": { "type": "string" }
+  },
+  "select_item": {
+    "item_id": { "required": true, "notNull": true }
+  }
+}'></textarea>
+          <div style="margin-top: 4px;">
+            <button id="masterJsonApplyBtn" onclick="applyMasterJson()" disabled style="font-size: 12px;">Apply</button>
+            <span id="masterJsonStatus" style="margin-left: 8px; font-size: 12px; color: #999;"></span>
+          </div>
+        </div>
         <div style="margin-top: 6px;">
           <input id="eventMapName" type="text" placeholder="event name" style="width: 25%; margin-right: 4px;" />
           <textarea id="eventMapJson" placeholder='{ "list_id": { "required": true } }' rows="3" style="width: 50%; vertical-align: middle; font-family: monospace; font-size: 13px; border-radius: 6px; border: 1px solid #666; padding: 6px;"></textarea>
@@ -490,7 +507,7 @@
         var parsed = JSON.parse(raw);
         // Remove existing rule for same event name (overwrite)
         eventMaps = eventMaps.filter(function(m) { return m.name !== name; });
-        eventMaps.push({ name: name, rules: parsed });
+        eventMaps.push({ name: name, rules: parsed, source: "individual" });
         syncValidatorRules();
         renderEventMaps();
         nameInput.value = "";
@@ -537,6 +554,76 @@
 
     function escapeAttr(str) {
       return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // --- Master JSON ---
+    function toggleMasterJson() {
+      var panel = document.getElementById("masterJsonPanel");
+      panel.style.display = panel.style.display === "none" ? "block" : "none";
+    }
+
+    document.getElementById("masterJsonInput").addEventListener("input", function () {
+      var raw = this.value.trim();
+      var btn = document.getElementById("masterJsonApplyBtn");
+      var status = document.getElementById("masterJsonStatus");
+      if (!raw) { btn.disabled = true; status.textContent = ""; return; }
+      try {
+        var parsed = JSON.parse(raw);
+        if (typeof parsed !== "object" || Array.isArray(parsed)) {
+          btn.disabled = true;
+          status.textContent = "Must be an object with event names as keys";
+          status.style.color = "#d0421b";
+          return;
+        }
+        // Validate structure: each key should map to an object of rules
+        var keys = Object.keys(parsed);
+        for (var i = 0; i < keys.length; i++) {
+          if (typeof parsed[keys[i]] !== "object" || Array.isArray(parsed[keys[i]])) {
+            btn.disabled = true;
+            status.textContent = "'" + keys[i] + "' must map to a rules object";
+            status.style.color = "#d0421b";
+            return;
+          }
+        }
+        btn.disabled = false;
+        status.textContent = keys.length + " event(s) detected";
+        status.style.color = "#0b9a5a";
+      } catch (e) {
+        btn.disabled = true;
+        status.textContent = "Invalid JSON";
+        status.style.color = "#d0421b";
+      }
+    });
+
+    function applyMasterJson() {
+      var raw = document.getElementById("masterJsonInput").value.trim();
+      var status = document.getElementById("masterJsonStatus");
+      try {
+        var parsed = JSON.parse(raw);
+        var keys = Object.keys(parsed);
+        // Load master rules — keep individually added ones that aren't in master
+        // First, set all master entries
+        for (var i = 0; i < keys.length; i++) {
+          var name = keys[i];
+          var existing = -1;
+          for (var j = 0; j < eventMaps.length; j++) {
+            if (eventMaps[j].name === name) { existing = j; break; }
+          }
+          if (existing >= 0) {
+            eventMaps[existing].rules = parsed[name];
+            eventMaps[existing].source = "master";
+          } else {
+            eventMaps.push({ name: name, rules: parsed[name], source: "master" });
+          }
+        }
+        syncValidatorRules();
+        renderEventMaps();
+        status.textContent = "Applied " + keys.length + " event(s)";
+        status.style.color = "#0b9a5a";
+      } catch (e) {
+        status.textContent = "Error: " + e.message;
+        status.style.color = "#d0421b";
+      }
     }
 
     // Resolves a field by searching the entire object tree for the key
