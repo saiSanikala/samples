@@ -175,23 +175,23 @@
     }
 
     #playGround {
-      width: 50%;
+      width: 100%;
       height: 95%;
       margin-top: 2%;
-
     }
 
     .textarea-wrapper {
       position: relative;
-      display: inline-block;
-      /* shrink to textarea width */
-      height: 50%;
+      display: inline-flex;
+      align-items: center;
+      width: 100%;
+      height: 30%;
     }
 
     .info-icon {
-      position: absolute;
-      top: 2%;
-      left: 48%;
+      position: relative;
+      top: -42%;
+      right: 7%;
       cursor: pointer;
     }
 
@@ -217,13 +217,16 @@
     }
 
     .steps {
-      top: 50%;
-      position: absolute;
+      flex-shrink: 0;
     }
 
     /* Labels */
     .label-container {
       margin-top: 3%;
+    }
+
+    .label-controls {
+        margin-top: 2%;
     }
 
     .label {
@@ -297,12 +300,39 @@
     </div>
       <!-- Input + Add + Done -->
       <div class="label-controls">
+        <label>Events to ignore</label>
         <input id="labelInput" type="text" placeholder="event name => press enter" />
         <button onclick="finishLabels()">Done</button>
       </div>
 
       <!-- Where labels appear -->
       <div id="labelContainer" class="label-container"></div>
+
+      <!-- Event Validator block -->
+      <div class="label-controls" style="margin-top: 12px;">
+        <span style="font-weight: 600; font-size: 14px;">Event Validator</span>
+        <span class="info-icon" style="position: relative; top: 0; right: 0; display: inline;">
+          ℹ️
+          <span class="tooltip" style="left: 25px; top: -5px; width: 380px;">
+            Flat key-value rules. Keys are field names — the engine<br>
+            searches the entire payload tree for each key.<br><br>
+            <code>"required": true</code> — field must exist<br>
+            <code>"notNull": true</code> — not null/undefined/""<br>
+            <code>"match": "val"</code> — exact value match<br>
+            <code>"type": "string"</code> — string|number|boolean|array|object<br>
+            <code>"minLength": 1</code> — min items (array) or chars (string)<br>
+            <code>"oneOf": [...]</code> — value must be in list<br><br>
+            Example:<br>
+            <code style="white-space: pre-wrap;">{ "list_id": { "required": true, "notNull": true }, "item_name": { "type": "string" } }</code>
+          </span>
+        </span>
+        <div style="margin-top: 6px;">
+          <input id="eventMapName" type="text" placeholder="event name" style="width: 25%; margin-right: 4px;" />
+          <textarea id="eventMapJson" placeholder='{ "list_id": { "required": true } }' rows="3" style="width: 50%; vertical-align: middle; font-family: monospace; font-size: 13px; border-radius: 6px; border: 1px solid #666; padding: 6px;"></textarea>
+          <button id="eventMapDoneBtn" onclick="addEventMap()" disabled style="margin-left: 4px;">Done</button>
+        </div>
+      </div>
+      <div id="eventMapContainer" class="label-container"></div>
     <div class="bottom-input">
       <span>Iterations: </span><input id="iterations" type="number" placeholder="1" value=1>
     </div>
@@ -329,7 +359,8 @@
       } else {
         toggle.textContent = '>';
         toggle.style.left = "0";      // stick to screen edge
-        if (overlay)
+        // Only restore overlay if socket is already connected
+        if (overlay && WS_LIVE)
           overlay.style.display = 'block';
       }
     }
@@ -427,6 +458,176 @@
           addLabel();
         }
       });
+
+    // --- Event Validator ---
+    var eventMaps = []; // [{name, rules}]
+    window.eventValidatorRules = {}; // keyed by event name, always live
+
+    document.getElementById("eventMapJson").addEventListener("input", validateEventMapJson);
+    document.getElementById("eventMapName").addEventListener("input", validateEventMapJson);
+
+    function validateEventMapJson() {
+      var name = document.getElementById("eventMapName").value.trim();
+      var raw = document.getElementById("eventMapJson").value.trim();
+      var btn = document.getElementById("eventMapDoneBtn");
+      if (!name || !raw) { btn.disabled = true; return; }
+      try {
+        var parsed = JSON.parse(raw);
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) { btn.disabled = true; return; }
+        btn.disabled = false;
+      } catch (e) {
+        btn.disabled = true;
+      }
+    }
+
+    function addEventMap() {
+      var nameInput = document.getElementById("eventMapName");
+      var jsonInput = document.getElementById("eventMapJson");
+      var name = nameInput.value.trim();
+      var raw = jsonInput.value.trim();
+      if (!name || !raw) return;
+      try {
+        var parsed = JSON.parse(raw);
+        // Remove existing rule for same event name (overwrite)
+        eventMaps = eventMaps.filter(function(m) { return m.name !== name; });
+        eventMaps.push({ name: name, rules: parsed });
+        syncValidatorRules();
+        renderEventMaps();
+        nameInput.value = "";
+        jsonInput.value = "";
+        document.getElementById("eventMapDoneBtn").disabled = true;
+      } catch (e) { }
+    }
+
+    function removeEventMap(index) {
+      eventMaps.splice(index, 1);
+      syncValidatorRules();
+      renderEventMaps();
+    }
+
+    function syncValidatorRules() {
+      window.eventValidatorRules = {};
+      for (var i = 0; i < eventMaps.length; i++) {
+        window.eventValidatorRules[eventMaps[i].name] = eventMaps[i].rules;
+      }
+    }
+
+    function renderEventMaps() {
+      var container = document.getElementById("eventMapContainer");
+      container.innerHTML = "";
+      for (var i = 0; i < eventMaps.length; i++) {
+        var div = document.createElement("div");
+        div.className = "label";
+        div.style.display = "inline-flex";
+        div.style.alignItems = "center";
+        div.style.gap = "6px";
+        var rulesStr = JSON.stringify(eventMaps[i].rules, null, 2);
+        var preview = eventMaps[i].name;
+        div.innerHTML =
+          '<span>' + escapeAttr(preview) + '</span>' +
+          '<span class="info-icon" style="position:relative;top:0;right:0;display:inline;cursor:pointer;">ℹ️' +
+            '<span class="tooltip" style="left:25px;top:-5px;width:350px;white-space:pre-wrap;font-family:monospace;font-size:12px;">' +
+              escapeAttr(rulesStr) +
+            '</span>' +
+          '</span>' +
+          ' <span class="close-btn" onclick="removeEventMap(' + i + ')">&times;</span>';
+        container.appendChild(div);
+      }
+    }
+
+    function escapeAttr(str) {
+      return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Resolves a field by searching the entire object tree for the key
+    function findFieldInPayload(obj, fieldName) {
+      var results = [];
+      function search(o) {
+        if (o == null || typeof o !== "object") return;
+        if (Array.isArray(o)) {
+          for (var i = 0; i < o.length; i++) search(o[i]);
+          return;
+        }
+        for (var key in o) {
+          if (!o.hasOwnProperty(key)) continue;
+          if (key === fieldName) {
+            results.push(o[key]);
+          }
+          search(o[key]);
+        }
+      }
+      search(obj);
+      if (results.length === 0) return { exists: false, values: [] };
+      return { exists: true, values: results };
+    }
+
+    // Validates a single payload against a rules object
+    // Returns array of {field, rule, message}
+    function validatePayloadAgainstRules(payload, rules) {
+      var errors = [];
+      if (!rules || typeof rules !== "object") return errors;
+      var fields = Object.keys(rules);
+      for (var f = 0; f < fields.length; f++) {
+        var fieldName = fields[f];
+        var fieldRules = rules[fieldName];
+        if (!fieldRules || typeof fieldRules !== "object") continue;
+
+        var found = findFieldInPayload(payload, fieldName);
+
+        if (fieldRules.required && !found.exists) {
+          errors.push({ field: fieldName, rule: "required", message: "Field is required but missing" });
+          continue;
+        }
+        if (!found.exists) continue;
+
+        // Validate each occurrence found
+        for (var v = 0; v < found.values.length; v++) {
+          var val = found.values[v];
+          var suffix = found.values.length > 1 ? "[" + v + "]" : "";
+
+          if (fieldRules.notNull && (val === null || val === undefined || val === "")) {
+            errors.push({ field: fieldName + suffix, rule: "notNull", message: "Must not be null/empty, got: " + JSON.stringify(val) });
+          }
+
+          if (fieldRules.match !== undefined && val !== fieldRules.match) {
+            errors.push({ field: fieldName + suffix, rule: "match", message: "Expected '" + fieldRules.match + "', got '" + val + "'" });
+          }
+
+          if (fieldRules.type) {
+            var actualType = Array.isArray(val) ? "array" : typeof val;
+            if (actualType !== fieldRules.type) {
+              errors.push({ field: fieldName + suffix, rule: "type", message: "Expected type '" + fieldRules.type + "', got '" + actualType + "'" });
+            }
+          }
+
+          if (fieldRules.minLength !== undefined) {
+            var len = (typeof val === "string" || Array.isArray(val)) ? val.length : 0;
+            if (len < fieldRules.minLength) {
+              errors.push({ field: fieldName + suffix, rule: "minLength", message: "Min length " + fieldRules.minLength + ", got " + len });
+            }
+          }
+
+          if (fieldRules.oneOf && Array.isArray(fieldRules.oneOf)) {
+            if (fieldRules.oneOf.indexOf(val) === -1) {
+              errors.push({ field: fieldName + suffix, rule: "oneOf", message: "Value '" + val + "' not in allowed list: " + JSON.stringify(fieldRules.oneOf) });
+            }
+          }
+        }
+      }
+      return errors;
+    }
+
+    // Called from GAGV when an event is processed — runs validation if rules exist
+    // Attach to window so gagv.js can call it
+    window.validateEvent = function(eventName, payload) {
+      if (!window.eventValidatorRules || !window.eventValidatorRules[eventName]) return null;
+      var rules = window.eventValidatorRules[eventName];
+      var errors = validatePayloadAgainstRules(payload, rules);
+      if (errors.length > 0) {
+        console.warn("⚠️ Validation failed for '" + eventName + "':", errors);
+      }
+      return errors;
+    };
   </script>
 </body>
 
