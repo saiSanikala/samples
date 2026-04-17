@@ -1,7 +1,6 @@
 // compare-monitor.js — updated: legend toggles hide/show color-coded elements inside compare popup only
 // wss://socket-0akf.onrender.com/?id=sai
 
-
 window.fetchLog = false;
 window.fetchNetwork = false;
 async function simulateKeydown(key, options = {}) {
