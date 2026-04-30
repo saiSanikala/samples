@@ -275,6 +275,104 @@
       line-height: 1;
       color: #555;
     }
+
+    /* EventData sliding panel */
+    .event-data-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .event-data-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .event-data-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 30%;
+      height: 100%;
+      background: #fff;
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.25);
+      z-index: 2001;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .event-data-panel.open {
+      transform: translateX(0);
+    }
+
+    .event-data-panel .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #ddd;
+      background: #fafafa;
+    }
+
+    .event-data-panel .panel-header h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .event-data-panel .panel-close {
+      border: none;
+      background: transparent;
+      font-size: 22px;
+      cursor: pointer;
+      color: #333;
+    }
+
+    .event-data-panel .panel-body {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .event-data-panel textarea {
+      width: 100%;
+      min-height: 300px;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+
+    .event-data-panel .validation-output {
+      font-size: 12px;
+      background: #f7f7f7;
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-y: auto;
+      max-height: 300px;
+      border: 1px solid #eee;
+    }
+
+    .validation-pass {
+      color: #1a7f37;
+    }
+
+    .validation-fail {
+      color: #b00020;
+    }
   </style>
 </head>
 
@@ -284,8 +382,32 @@
     <input type="file" id="fileInput" accept=".json,.har" multiple />
     <input type="text" id="startTime" placeholder="hh:mm:ss" />
     <input type="text" id="endTime" placeholder="hh:mm:ss" />
-    <button id="report" class="report-button">show report</button>
+    <button id="report" class="report-button" style="margin-right:8px;">show report</button>
+    <button id="eventDataBtn" class="report-button" style="right:12%;">EventData</button>
   </header>
+
+  <!-- EventData sliding panel -->
+  <div id="eventDataOverlay" class="event-data-overlay"></div>
+  <div id="eventDataPanel" class="event-data-panel" role="dialog" aria-label="Event Data Validation">
+    <div class="panel-header">
+      <h3>Event Data Validation</h3>
+      <button id="eventDataClose" class="panel-close" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="panel-body">
+      <label for="eventRulesInput" style="font-size:13px;font-weight:600;">Validation Rules (JSON):</label>
+      <textarea id="eventRulesInput" placeholder='{
+  "eventName": {
+    "fieldName": {
+      "required": true,
+      "notNull": true,
+      "type": "string",
+      "length": 10
+    }
+  }
+}'></textarea>
+      <div id="eventDataOutput" class="validation-output" style="display:none;"></div>
+    </div>
+  </div>
 
   <div class="controls">
     <label>
@@ -514,6 +636,9 @@
       } catch (e) {
         alert('Enter valid JSON');
       }
+
+      // Also run EventData panel validation if rules are provided
+      runEventDataValidation();
     });
 
     function unwrapValue(v) {
@@ -1217,7 +1342,190 @@
     function hideModal() { modalOverlay.classList.add("modal-hidden"); }
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !modalOverlay.classList.contains("modal-hidden")) hideModal();
+      if (e.key === "Escape" && eventDataPanel.classList.contains("open")) closeEventDataPanel();
     });
+
+    // ── EventData Sliding Panel ──
+    const eventDataBtn = document.getElementById("eventDataBtn");
+    const eventDataOverlay = document.getElementById("eventDataOverlay");
+    const eventDataPanel = document.getElementById("eventDataPanel");
+    const eventDataClose = document.getElementById("eventDataClose");
+    const eventRulesInput = document.getElementById("eventRulesInput");
+    const eventDataOutput = document.getElementById("eventDataOutput");
+
+    function openEventDataPanel() {
+      eventDataOverlay.classList.add("open");
+      eventDataPanel.classList.add("open");
+    }
+
+    function closeEventDataPanel() {
+      eventDataOverlay.classList.remove("open");
+      eventDataPanel.classList.remove("open");
+    }
+
+    eventDataBtn.addEventListener("click", openEventDataPanel);
+    eventDataClose.addEventListener("click", closeEventDataPanel);
+    eventDataOverlay.addEventListener("click", closeEventDataPanel);
+
+    function resolveEventName(entry) {
+      const raw = entry.raw || {};
+      // Try GA event name
+      try {
+        const text = raw.request?.postData?.text;
+        if (text) {
+          const parsed = JSON.parse(text);
+          if (parsed.events && parsed.events[0] && parsed.events[0].name) return parsed.events[0].name;
+          if (parsed.event_name) return parsed.event_name;
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              if (item.event_name) return item.event_name;
+            }
+          }
+        }
+      } catch (e) { }
+      // Try query params
+      try {
+        const url = new URL(entry.url);
+        const en = url.searchParams.get("en") || url.searchParams.get("event_name");
+        if (en) return en;
+      } catch (e) { }
+      return null;
+    }
+
+    function extractEventPayload(entry) {
+      const raw = entry.raw || {};
+      try {
+        const text = raw.request?.postData?.text;
+        if (text) {
+          const parsed = JSON.parse(text);
+          // GA format
+          if (parsed.events && parsed.events[0] && parsed.events[0].params) return parsed.events[0].params;
+          // GV format
+          if (parsed.event_data) return parsed.event_data;
+          // Array of records
+          if (Array.isArray(parsed) && parsed[0]) {
+            if (parsed[0].event_data) return parsed[0].event_data;
+            return parsed[0];
+          }
+          return parsed;
+        }
+      } catch (e) { }
+      // Fallback: collect all key-values
+      return collectKeyValues(entry);
+    }
+
+    function validateFieldRules(value, rules, fieldName) {
+      const errors = [];
+      const exists = value !== undefined;
+      const isNull = value === null || value === undefined || value === "";
+
+      if (rules.required === true && !exists) {
+        errors.push(`"${fieldName}": required but missing`);
+        return errors;
+      }
+
+      if (!exists) return errors;
+
+      if (rules.notNull === true && isNull) {
+        errors.push(`"${fieldName}": must not be null/empty`);
+      }
+
+      if (rules.type && !isNull) {
+        const t = rules.type.toLowerCase();
+        let typeOk = false;
+        switch (t) {
+          case "string":
+            typeOk = typeof value === "string";
+            break;
+          case "number":
+            typeOk = typeof value === "number" || (typeof value === "string" && !isNaN(Number(value)) && value.trim() !== "");
+            break;
+          case "boolean":
+            typeOk = typeof value === "boolean" || value === "true" || value === "false";
+            break;
+          case "alphanumeric":
+            typeOk = typeof value === "string" && /^[a-z0-9]+$/i.test(value);
+            break;
+          case "array":
+            typeOk = Array.isArray(value);
+            break;
+          case "object":
+            typeOk = typeof value === "object" && !Array.isArray(value) && value !== null;
+            break;
+          default:
+            typeOk = true;
+        }
+        if (!typeOk) {
+          errors.push(`"${fieldName}": expected type "${t}", got "${typeof value}"`);
+        }
+      }
+
+      if (rules.length !== undefined && typeof value === "string") {
+        if (value.length !== rules.length) {
+          errors.push(`"${fieldName}": expected length ${rules.length}, got ${value.length}`);
+        }
+      }
+
+      return errors;
+    }
+
+    function runEventDataValidation() {
+      eventDataOutput.style.display = "block";
+      eventDataOutput.textContent = "";
+
+      let rulesJson;
+      try {
+        rulesJson = JSON.parse(eventRulesInput.value);
+      } catch (e) {
+        eventDataOutput.className = "validation-output validation-fail";
+        eventDataOutput.textContent = "Invalid JSON. Please check your input.";
+        return;
+      }
+
+      if (!filteredEntries.length) {
+        eventDataOutput.className = "validation-output validation-fail";
+        eventDataOutput.textContent = "No entries loaded. Load a HAR/JSON file first.";
+        return;
+      }
+
+      const lines = [];
+      let totalPass = 0;
+      let totalFail = 0;
+
+      filteredEntries.forEach((entry, idx) => {
+        const evtName = resolveEventName(entry);
+        if (!evtName || !rulesJson[evtName]) return;
+
+        const fieldRules = rulesJson[evtName];
+        const payload = extractEventPayload(entry);
+        const entryErrors = [];
+
+        for (const field in fieldRules) {
+          const value = payload ? payload[field] : undefined;
+          const errs = validateFieldRules(value, fieldRules[field], field);
+          entryErrors.push(...errs);
+        }
+
+        if (entryErrors.length === 0) {
+          totalPass++;
+          lines.push(`✅ #${idx + 1} [${evtName}]: PASS`);
+        } else {
+          totalFail++;
+          lines.push(`❌ #${idx + 1} [${evtName}]: FAIL`);
+          entryErrors.forEach(e => lines.push(`     ${e}`));
+        }
+      });
+
+      if (lines.length === 0) {
+        eventDataOutput.className = "validation-output";
+        eventDataOutput.textContent = "No matching events found for the provided rules.";
+        return;
+      }
+
+      const summary = `Validated: ${totalPass + totalFail} | Pass: ${totalPass} | Fail: ${totalFail}\n${"─".repeat(50)}\n`;
+      eventDataOutput.className = "validation-output " + (totalFail > 0 ? "validation-fail" : "validation-pass");
+      eventDataOutput.textContent = summary + lines.join("\n");
+    }
   </script>
 </body>
 
