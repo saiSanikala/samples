@@ -620,24 +620,27 @@
         }
         excludeInput.value = "";
       }
-      let validationJson = validationInput.value || '{}';
-      results = [];
-      try {
-        validationJson = JSON.parse(validationJson);
-        filteredEntries.forEach((input, ind) => {
-          if(Object.hasOwn(input, 'result'))
-            delete input.result;
-          results.push(validateJson(input, validationJson, ind));
-        })
-        console.log(results);
-        // re-render results
-        tableContainer.innerHTML = "";
-        tableContainer.appendChild(renderTable(filteredEntries));
-      } catch (e) {
-        alert('Enter valid JSON');
+
+      // Run inline validation only if the inline input has content
+      let validationJsonStr = validationInput.value.trim();
+      if (validationJsonStr) {
+        results = [];
+        try {
+          let validationJson = JSON.parse(validationJsonStr);
+          filteredEntries.forEach((input, ind) => {
+            if(Object.hasOwn(input, 'result'))
+              delete input.result;
+            results.push(validateJson(input, validationJson, ind));
+          })
+          console.log(results);
+          tableContainer.innerHTML = "";
+          tableContainer.appendChild(renderTable(filteredEntries));
+        } catch (err) {
+          alert('Enter valid JSON in the inline input');
+        }
       }
 
-      // Also run EventData panel validation if rules are provided
+      // Always run EventData panel validation
       runEventDataValidation();
     });
 
