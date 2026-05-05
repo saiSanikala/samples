@@ -1462,6 +1462,15 @@
       document.getElementById("eventFilterBatch").checked = e.target.checked;
     });
 
+    // Priority/Batch sync back to GV
+    function syncGVCheckbox() {
+      const p = document.getElementById("eventFilterPriority").checked;
+      const b = document.getElementById("eventFilterBatch").checked;
+      document.getElementById("eventFilterGV").checked = p || b;
+    }
+    document.getElementById("eventFilterPriority").addEventListener("change", syncGVCheckbox);
+    document.getElementById("eventFilterBatch").addEventListener("change", syncGVCheckbox);
+
     function resolveEventName(entry) {
       const raw = entry.raw || {};
       // Try GA event name
