@@ -354,20 +354,73 @@
       box-sizing: border-box;
     }
 
+    .event-data-panel .validate-btn {
+      padding: 8px 16px;
+      background: #0366d6;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      align-self: flex-start;
+    }
+
+    .event-data-panel .validate-btn:hover:not(:disabled) {
+      background: #0255b3;
+    }
+
+    .event-data-panel .validate-btn:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+
     .event-data-panel .validation-output {
       font-size: 12px;
       background: #f7f7f7;
-      padding: 10px;
+      padding: 0;
       border-radius: 4px;
-      white-space: pre-wrap;
-      word-break: break-word;
       overflow-y: auto;
-      max-height: 300px;
+      max-height: 400px;
       border: 1px solid #eee;
     }
 
-    .validation-pass {
+    .event-data-panel .validation-output table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .event-data-panel .validation-output th,
+    .event-data-panel .validation-output td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .event-data-panel .validation-output th {
+      background: #eee;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+
+    .event-data-panel .validation-output .pass {
       color: #1a7f37;
+      font-weight: 600;
+    }
+
+    .event-data-panel .validation-output .fail {
+      color: #b00020;
+      font-weight: 600;
+    }
+
+    .event-data-panel .validation-summary {
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #fafafa;
+      border-bottom: 1px solid #ddd;
     }
 
     .validation-fail {
@@ -394,6 +447,20 @@
       <button id="eventDataClose" class="panel-close" aria-label="Close panel">&times;</button>
     </div>
     <div class="panel-body">
+      <div style="display:flex;gap:16px;margin-bottom:8px;">
+        <label style="font-size:13px;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="eventFilterGA" checked /> GA
+        </label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="eventFilterGV" checked /> GV
+        </label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:4px;margin-left:8px;">
+          <input type="checkbox" id="eventFilterPriority" checked /> Priority
+        </label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="eventFilterBatch" checked /> Batch
+        </label>
+      </div>
       <label for="eventRulesInput" style="font-size:13px;font-weight:600;">Validation Rules (JSON):</label>
       <textarea id="eventRulesInput" placeholder='{
   "eventName": {
@@ -405,6 +472,7 @@
     }
   }
 }'></textarea>
+      <button id="eventPanelValidate" class="validate-btn" disabled>Validate</button>
       <div id="eventDataOutput" class="validation-output" style="display:none;"></div>
     </div>
   </div>
@@ -640,7 +708,11 @@
         }
       }
 
-      // Always run EventData panel validation
+      // Always run EventData panel validation and open panel if there are rules
+      const hasEventRules = eventRulesInput.value.trim();
+      if (hasEventRules) {
+        openEventDataPanel();
+      }
       runEventDataValidation();
     });
 
@@ -811,6 +883,7 @@
         tableContainer.innerHTML = "";
         tableContainer.appendChild(renderTable(filtered));
         filteredEntries = filtered;
+        if (typeof updatePanelValidateBtn === 'function') updatePanelValidateBtn();
       } catch (e) {
         console.log(e);
       }
@@ -1355,6 +1428,15 @@
     const eventDataClose = document.getElementById("eventDataClose");
     const eventRulesInput = document.getElementById("eventRulesInput");
     const eventDataOutput = document.getElementById("eventDataOutput");
+    const eventPanelValidate = document.getElementById("eventPanelValidate");
+
+    function updatePanelValidateBtn() {
+      const hasRules = eventRulesInput.value.trim().length > 0;
+      const hasEntries = filteredEntries.length > 0;
+      eventPanelValidate.disabled = !(hasRules && hasEntries);
+    }
+
+    eventRulesInput.addEventListener("input", updatePanelValidateBtn);
 
     function openEventDataPanel() {
       eventDataOverlay.classList.add("open");
@@ -1369,6 +1451,16 @@
     eventDataBtn.addEventListener("click", openEventDataPanel);
     eventDataClose.addEventListener("click", closeEventDataPanel);
     eventDataOverlay.addEventListener("click", closeEventDataPanel);
+
+    eventPanelValidate.addEventListener("click", () => {
+      runEventDataValidation();
+    });
+
+    // GV checkbox controls Priority and Batch
+    document.getElementById("eventFilterGV").addEventListener("change", (e) => {
+      document.getElementById("eventFilterPriority").checked = e.target.checked;
+      document.getElementById("eventFilterBatch").checked = e.target.checked;
+    });
 
     function resolveEventName(entry) {
       const raw = entry.raw || {};
@@ -1491,11 +1583,32 @@
         return;
       }
 
-      const lines = [];
+      const gaChecked = document.getElementById("eventFilterGA").checked;
+      const gvChecked = document.getElementById("eventFilterGV").checked;
+      const priorityChecked = document.getElementById("eventFilterPriority").checked;
+      const batchChecked = document.getElementById("eventFilterBatch").checked;
+      const gaEndPoint = "www.google-analytics.com/";
+      const gvPriorityEndPoint = "priority/records";
+      const gvBatchEndPoint = "batched/records";
+
+      const rows = [];
       let totalPass = 0;
       let totalFail = 0;
 
       filteredEntries.forEach((entry, idx) => {
+        const url = (entry.url || "").toLowerCase();
+
+        const isGA = url.includes(gaEndPoint);
+        const isPriority = url.includes(gvPriorityEndPoint);
+        const isBatch = url.includes(gvBatchEndPoint);
+        const isGV = isPriority || isBatch;
+
+        if (isGA && !gaChecked) return;
+        if (isGV && !gvChecked) return;
+        if (isPriority && !priorityChecked) return;
+        if (isBatch && !batchChecked) return;
+        if (!isGA && !isGV) return;
+
         const evtName = resolveEventName(entry);
         if (!evtName || !rulesJson[evtName]) return;
 
@@ -1509,25 +1622,40 @@
           entryErrors.push(...errs);
         }
 
+        const source = isGA ? "GA" : (isPriority ? "GV-P" : "GV-B");
         if (entryErrors.length === 0) {
           totalPass++;
-          lines.push(`✅ #${idx + 1} [${evtName}]: PASS`);
+          rows.push({ idx: idx + 1, source, evtName, status: "PASS", errors: [] });
         } else {
           totalFail++;
-          lines.push(`❌ #${idx + 1} [${evtName}]: FAIL`);
-          entryErrors.forEach(e => lines.push(`     ${e}`));
+          rows.push({ idx: idx + 1, source, evtName, status: "FAIL", errors: entryErrors });
         }
       });
 
-      if (lines.length === 0) {
+      if (rows.length === 0) {
         eventDataOutput.className = "validation-output";
-        eventDataOutput.textContent = "No matching events found for the provided rules.";
+        eventDataOutput.innerHTML = "<p style='padding:10px;margin:0;color:#666;'>No matching events found for the provided rules.</p>";
         return;
       }
 
-      const summary = `Validated: ${totalPass + totalFail} | Pass: ${totalPass} | Fail: ${totalFail}\n${"─".repeat(50)}\n`;
-      eventDataOutput.className = "validation-output " + (totalFail > 0 ? "validation-fail" : "validation-pass");
-      eventDataOutput.textContent = summary + lines.join("\n");
+      let html = `<div class="validation-summary">Validated: ${totalPass + totalFail} | Pass: ${totalPass} | Fail: ${totalFail}</div>`;
+      html += `<table><thead><tr><th>#</th><th>Source</th><th>Event</th><th>Status</th><th>Errors</th></tr></thead><tbody>`;
+
+      rows.forEach(row => {
+        const statusClass = row.status === "PASS" ? "pass" : "fail";
+        const errText = row.errors.length ? row.errors.join("<br>") : "—";
+        html += `<tr>
+          <td>${row.idx}</td>
+          <td>${row.source}</td>
+          <td>${row.evtName}</td>
+          <td class="${statusClass}">${row.status}</td>
+          <td>${errText}</td>
+        </tr>`;
+      });
+
+      html += `</tbody></table>`;
+      eventDataOutput.className = "validation-output";
+      eventDataOutput.innerHTML = html;
     }
   </script>
 </body>
